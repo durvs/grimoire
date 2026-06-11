@@ -59,6 +59,19 @@ def _imports_schema() -> pa.Schema:
     ])
 
 
+def _rules_schema() -> pa.Schema:
+    return pa.schema([
+        pa.field("id", pa.string()),
+        pa.field("file_path", pa.string()),
+        pa.field("start_line", pa.int32()),
+        pa.field("end_line", pa.int32()),
+        pa.field("rule", pa.string()),
+        pa.field("category", pa.string()),
+        pa.field("confidence", pa.float32()),
+        pa.field("file_digest", pa.string()),
+    ])
+
+
 def _quote(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
@@ -84,6 +97,7 @@ class IndexStore:
         self.chunks = self.db.create_table("chunks", schema=_schema(), exist_ok=True)
         self.refs = self.db.create_table("refs", schema=_refs_schema(), exist_ok=True)
         self.imports = self.db.create_table("imports", schema=_imports_schema(), exist_ok=True)
+        self.rules = self.db.create_table("rules", schema=_rules_schema(), exist_ok=True)
         self._manifest_path = self.dir / "manifest.json"
         self._sync_lock = threading.Lock()
 
@@ -107,7 +121,7 @@ class IndexStore:
     def _sync_locked(self) -> dict:
         manifest = self._load_manifest()
         if manifest.get("version") != INDEX_VERSION:
-            for name in ("chunks", "refs", "imports"):
+            for name in ("chunks", "refs", "imports", "rules"):
                 try:
                     self.db.drop_table(name)
                 except Exception:  # noqa: BLE001 - tabela pode não existir
@@ -115,6 +129,7 @@ class IndexStore:
             self.chunks = self.db.create_table("chunks", schema=_schema(), exist_ok=True)
             self.refs = self.db.create_table("refs", schema=_refs_schema(), exist_ok=True)
             self.imports = self.db.create_table("imports", schema=_imports_schema(), exist_ok=True)
+            self.rules = self.db.create_table("rules", schema=_rules_schema(), exist_ok=True)
             manifest = {"project_path": str(self.root), "version": INDEX_VERSION, "files": {}}
         known: dict[str, str] = manifest["files"]
         all_scanned = scan(self.root)
@@ -134,6 +149,9 @@ class IndexStore:
             for tbl in (self.chunks, self.refs, self.imports):
                 tbl.delete(f"file_path = {_quote(rel)}")
             known.pop(rel, None)
+
+        for rel in deleted:
+            self.rules.delete(f"file_path = {_quote(rel)}")
 
         chunks_added = 0
         refs_added = 0
@@ -192,6 +210,13 @@ class IndexStore:
                     imports_added += len(rows)
             known[f.rel_path] = f.digest
 
+            rule_rows = [
+                r for r in self.rules.to_arrow().to_pylist()
+                if r["file_path"] == f.rel_path
+            ]
+            if rule_rows:
+                self._mirror_rules(rule_rows, current_digests={f.rel_path: f.digest})
+
         if changed or deleted:
             # LanceDB 0.33.0: create_fts_index(field_names, *, use_tantivy=False, replace=True)
             # use_tantivy=False activates the native (non-tantivy) FTS backend, which supports
@@ -209,3 +234,60 @@ class IndexStore:
             "refs_added": refs_added,
             "imports_added": imports_added,
         }
+
+    def save_rules_rows(self, rows: list[dict]) -> list[str]:
+        """Upsert por id na tabela rules + espelho kind="rule" no índice de busca.
+
+        Persiste na tabela primeiro; se o embedding do espelho falhar, a regra
+        não se perde (o re-espelho do próximo sync recupera).
+        """
+        if not rows:
+            return []
+        ids = [r["id"] for r in rows]
+        for rid in ids:
+            self.rules.delete(f"id = {_quote(rid)}")
+        self.rules.add(rows)
+        self._mirror_rules(rows, current_digests={r["file_path"]: r["file_digest"] for r in rows})
+        self.chunks.create_fts_index("text", use_tantivy=False, replace=True)
+        return ids
+
+    def _mirror_rules(self, rule_rows: list[dict], current_digests: dict[str, str]) -> None:
+        """(Re)emite os chunks kind="rule" para as regras dadas."""
+        for rid in (r["id"] for r in rule_rows):
+            self.chunks.delete(f"symbol = {_quote('rule:' + rid)}")
+        texts = []
+        for r in rule_rows:
+            stale = current_digests.get(r["file_path"]) != r["file_digest"]
+            marker = "[regra de negócio][stale]" if stale else "[regra de negócio]"
+            texts.append(f"{marker} {r['rule']}")
+        vectors = self.embed_fn(texts)
+        self.chunks.add([
+            {
+                "vector": vec, "text": text, "file_path": r["file_path"],
+                "start_line": r["start_line"], "end_line": r["end_line"],
+                "symbol": f"rule:{r['id']}", "kind": "rule", "language": "rule",
+            }
+            for r, vec, text in zip(rule_rows, vectors, texts)
+        ])
+
+    def list_rules(self, file_path: str | None = None) -> list[dict]:
+        manifest = self._load_manifest()
+        digests = manifest["files"]
+        rows = self.rules.to_arrow().to_pylist()
+        if file_path is not None:
+            rows = [r for r in rows if r["file_path"] == file_path]
+        out = []
+        for r in sorted(rows, key=lambda r: (r["file_path"], r["start_line"])):
+            out.append({
+                "id": r["id"], "rule": r["rule"], "category": r["category"],
+                "confidence": round(r["confidence"], 2), "file": r["file_path"],
+                "start_line": r["start_line"], "end_line": r["end_line"],
+                "stale": digests.get(r["file_path"]) != r["file_digest"],
+            })
+        return out
+
+    def delete_rule_row(self, rule_id: str) -> bool:
+        existed = bool([r for r in self.rules.to_arrow().to_pylist() if r["id"] == rule_id])
+        self.rules.delete(f"id = {_quote(rule_id)}")
+        self.chunks.delete(f"symbol = {_quote('rule:' + rule_id)}")
+        return existed

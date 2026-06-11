@@ -107,6 +107,99 @@ def test_v1_manifest_triggers_full_reindex(sample_repo, monkeypatch, tmp_path):
     assert store2.refs.count_rows() > 0
 
 
+def _rule_row(file_path, digest, rule="Desconto de 10% acima de 100", rid="abc123def456"):
+    return {
+        "id": rid, "file_path": file_path, "start_line": 10, "end_line": 12,
+        "rule": rule, "category": "calculation", "confidence": 0.9,
+        "file_digest": digest,
+    }
+
+
+def _digest_of(store, rel):
+    import json
+    manifest = json.loads(store._manifest_path.read_text())
+    return manifest["files"][rel]
+
+
+def test_save_rules_rows_persists_and_mirrors(sample_repo, monkeypatch, tmp_path):
+    monkeypatch.setattr("grimoire_mcp.config.GRIMOIRE_HOME", tmp_path / "h")
+    store = IndexStore(sample_repo, embed_fn=fake_embed)
+    store.sync()
+    row = _rule_row("src/orders.ts", _digest_of(store, "src/orders.ts"))
+    store.save_rules_rows([row])
+
+    assert store.rules.count_rows() == 1
+    mirror = [c for c in store.chunks.to_arrow().to_pylist() if c["kind"] == "rule"]
+    assert len(mirror) == 1
+    assert mirror[0]["symbol"] == "rule:abc123def456"
+    assert "Desconto de 10%" in mirror[0]["text"]
+    assert mirror[0]["file_path"] == "src/orders.ts"
+
+
+def test_save_rules_rows_upserts_by_id(sample_repo, monkeypatch, tmp_path):
+    monkeypatch.setattr("grimoire_mcp.config.GRIMOIRE_HOME", tmp_path / "h")
+    store = IndexStore(sample_repo, embed_fn=fake_embed)
+    store.sync()
+    d = _digest_of(store, "src/orders.ts")
+    store.save_rules_rows([_rule_row("src/orders.ts", d)])
+    store.save_rules_rows([_rule_row("src/orders.ts", d)])  # mesmo id
+    assert store.rules.count_rows() == 1
+    assert len([c for c in store.chunks.to_arrow().to_pylist() if c["kind"] == "rule"]) == 1
+
+
+def test_list_rules_derives_staleness(sample_repo, monkeypatch, tmp_path):
+    monkeypatch.setattr("grimoire_mcp.config.GRIMOIRE_HOME", tmp_path / "h")
+    store = IndexStore(sample_repo, embed_fn=fake_embed)
+    store.sync()
+    store.save_rules_rows([_rule_row("src/orders.ts", _digest_of(store, "src/orders.ts"))])
+    assert store.list_rules()[0]["stale"] is False
+
+    (sample_repo / "src" / "orders.ts").write_text("export const x = 1;\n")
+    store.sync()
+    listed = store.list_rules()
+    assert listed[0]["stale"] is True
+    # espelho re-emitido com marcador de stale
+    mirror = [c for c in store.chunks.to_arrow().to_pylist() if c["kind"] == "rule"]
+    assert len(mirror) == 1
+    assert "[stale]" in mirror[0]["text"]
+
+
+def test_deleted_file_cascades_rules(sample_repo, monkeypatch, tmp_path):
+    monkeypatch.setattr("grimoire_mcp.config.GRIMOIRE_HOME", tmp_path / "h")
+    store = IndexStore(sample_repo, embed_fn=fake_embed)
+    store.sync()
+    store.save_rules_rows([_rule_row("src/orders.ts", _digest_of(store, "src/orders.ts"))])
+    (sample_repo / "src" / "orders.ts").unlink()
+    store.sync()
+    assert store.rules.count_rows() == 0
+    assert [c for c in store.chunks.to_arrow().to_pylist() if c["kind"] == "rule"] == []
+
+
+def test_delete_rule_row(sample_repo, monkeypatch, tmp_path):
+    monkeypatch.setattr("grimoire_mcp.config.GRIMOIRE_HOME", tmp_path / "h")
+    store = IndexStore(sample_repo, embed_fn=fake_embed)
+    store.sync()
+    store.save_rules_rows([_rule_row("src/orders.ts", _digest_of(store, "src/orders.ts"))])
+    assert store.delete_rule_row("abc123def456") is True
+    assert store.delete_rule_row("abc123def456") is False
+    assert store.rules.count_rows() == 0
+    assert [c for c in store.chunks.to_arrow().to_pylist() if c["kind"] == "rule"] == []
+
+
+def test_rule_searchable_via_hybrid_search(sample_repo, monkeypatch, tmp_path):
+    from grimoire_mcp.search import hybrid_search
+
+    monkeypatch.setattr("grimoire_mcp.config.GRIMOIRE_HOME", tmp_path / "h")
+    store = IndexStore(sample_repo, embed_fn=fake_embed)
+    store.sync()
+    store.save_rules_rows([_rule_row(
+        "src/orders.ts", _digest_of(store, "src/orders.ts"),
+        rule="Desconto de 10 por cento para totais acima de 100 reais",
+    )])
+    results = hybrid_search(store, "Desconto de 10 por cento", top_k=5)
+    assert any(r["kind"] == "rule" for r in results)
+
+
 def test_concurrent_syncs_do_not_duplicate_chunks(sample_repo, monkeypatch, tmp_path):
     import threading
 
