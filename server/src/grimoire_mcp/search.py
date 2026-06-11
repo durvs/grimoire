@@ -21,10 +21,11 @@ def _build_where(language: str | None, path_prefix: str | None) -> str | None:
 
 
 def _ranked(rows: list[dict]) -> dict[str, tuple[int, dict]]:
-    # Use symbol as key when available to avoid collisions between rule chunks
-    # and code chunks that happen to share the same file_path:start_line.
+    # Chave composta: file+symbol+linha. Símbolo sozinho colide entre arquivos
+    # (duas validate()); file:linha sozinho colide entre chunk de regra e de
+    # código na mesma posição (símbolos rule:<id> são únicos).
     return {
-        r.get("symbol") or f"{r['file_path']}:{r['start_line']}": (rank, r)
+        f"{r['file_path']}:{r['symbol']}:{r['start_line']}": (rank, r)
         for rank, r in enumerate(rows)
     }
 

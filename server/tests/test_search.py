@@ -46,3 +46,12 @@ def test_path_prefix_is_literal_not_wildcard(sample_repo, monkeypatch, tmp_path)
     assert all(r["file"].startswith("src/") for r in results)
     # % não é curinga: nenhum arquivo começa com "%.ts" literalmente
     assert hybrid_search(store, "service", top_k=10, path_prefix="%.ts") == []
+
+
+def test_same_symbol_in_two_files_returns_both(sample_repo, monkeypatch, tmp_path):
+    (sample_repo / "src" / "a.py").write_text("def validate(x):\n    return x > 0\n")
+    (sample_repo / "src" / "b.py").write_text("def validate(y):\n    return y < 100\n")
+    store = _store(sample_repo, monkeypatch, tmp_path)
+    results = hybrid_search(store, "validate", top_k=10)
+    files = {r["file"] for r in results if r["symbol"] == "validate"}
+    assert {"src/a.py", "src/b.py"} <= files
