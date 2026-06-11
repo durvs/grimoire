@@ -1,6 +1,6 @@
 [project]
 name = "grimoire-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "Local semantic code search MCP server - surgical context retrieval for AI agents"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -2,4 +2,4 @@ import grimoire_mcp
 
 
 def test_version():
-    assert grimoire_mcp.__version__ == "0.1.0"
+    assert grimoire_mcp.__version__ == "0.2.0"
