@@ -1,4 +1,5 @@
 import json
+import logging
 import threading
 from collections.abc import Callable
 from pathlib import Path
@@ -7,8 +8,11 @@ import lancedb
 import pyarrow as pa
 
 from . import config
-from .chunker import chunk_file
+from .chunker import chunk_file, detect_language, parse_tree
+from .references import extract, resolve_import
 from .scanner import scan
+
+logger = logging.getLogger(__name__)
 
 EmbedFn = Callable[[list[str]], list[list[float]]]
 
@@ -28,6 +32,30 @@ def _schema() -> pa.Schema:
         pa.field("symbol", pa.string()),
         pa.field("kind", pa.string()),
         pa.field("language", pa.string()),
+    ])
+
+
+INDEX_VERSION = 2
+
+
+def _refs_schema() -> pa.Schema:
+    return pa.schema([
+        pa.field("file_path", pa.string()),
+        pa.field("name", pa.string()),
+        pa.field("line", pa.int32()),
+        pa.field("kind", pa.string()),        # def | use
+        pa.field("container", pa.string()),
+        pa.field("line_text", pa.string()),
+    ])
+
+
+def _imports_schema() -> pa.Schema:
+    return pa.schema([
+        pa.field("file_path", pa.string()),
+        pa.field("module", pa.string()),
+        pa.field("line", pa.int32()),
+        pa.field("target", pa.string()),      # rel path resolvido ou ""
+        pa.field("status", pa.string()),      # resolved | external | unresolved
     ])
 
 
@@ -52,6 +80,8 @@ class IndexStore:
         self.dir.mkdir(parents=True, exist_ok=True)
         self.db = lancedb.connect(self.dir)
         self.chunks = self.db.create_table("chunks", schema=_schema(), exist_ok=True)
+        self.refs = self.db.create_table("refs", schema=_refs_schema(), exist_ok=True)
+        self.imports = self.db.create_table("imports", schema=_imports_schema(), exist_ok=True)
         self._manifest_path = self.dir / "manifest.json"
         self._sync_lock = threading.Lock()
 
@@ -63,7 +93,7 @@ class IndexStore:
             manifest["files"]
             return manifest
         except (OSError, json.JSONDecodeError, KeyError):
-            return {"project_path": str(self.root), "files": {}}
+            return {"project_path": str(self.root), "version": INDEX_VERSION, "files": {}}
 
     def _save_manifest(self, manifest: dict) -> None:
         self._manifest_path.write_text(json.dumps(manifest, indent=1))
@@ -74,6 +104,16 @@ class IndexStore:
 
     def _sync_locked(self) -> dict:
         manifest = self._load_manifest()
+        if manifest.get("version") != INDEX_VERSION:
+            for name in ("chunks", "refs", "imports"):
+                try:
+                    self.db.drop_table(name)
+                except Exception:  # noqa: BLE001 - tabela pode não existir
+                    pass
+            self.chunks = self.db.create_table("chunks", schema=_schema(), exist_ok=True)
+            self.refs = self.db.create_table("refs", schema=_refs_schema(), exist_ok=True)
+            self.imports = self.db.create_table("imports", schema=_imports_schema(), exist_ok=True)
+            manifest = {"project_path": str(self.root), "version": INDEX_VERSION, "files": {}}
         known: dict[str, str] = manifest["files"]
         all_scanned = scan(self.root)
         # Exclude files that live inside the index directory itself (edge case when
@@ -89,13 +129,24 @@ class IndexStore:
         deleted = [p for p in known if p not in current]
 
         for rel in deleted + [f.rel_path for f in changed]:
-            self.chunks.delete(f"file_path = {_quote(rel)}")
+            for tbl in (self.chunks, self.refs, self.imports):
+                tbl.delete(f"file_path = {_quote(rel)}")
             known.pop(rel, None)
 
         chunks_added = 0
+        refs_added = 0
+        imports_added = 0
+        current_paths = set(current)
         for f in changed:
             text = f.path.read_text(encoding="utf-8", errors="replace")
-            chunks = chunk_file(f.rel_path, text)
+            lang = detect_language(f.rel_path)
+            tree = None
+            if lang is not None and lang != "markdown":
+                try:
+                    tree = parse_tree(text, lang)
+                except Exception:  # noqa: BLE001 - gramática indisponível
+                    tree = None
+            chunks = chunk_file(f.rel_path, text, tree=tree)
             if chunks:
                 vectors = self.embed_fn(
                     [f"{c.symbol} ({c.file_path})\n{c.text}" for c in chunks]
@@ -109,6 +160,34 @@ class IndexStore:
                     for c, vec in zip(chunks, vectors)
                 ])
                 chunks_added += len(chunks)
+
+            if tree is not None:
+                lines = text.splitlines()
+                try:
+                    refs, raw_imports = extract(f.rel_path, tree, text.encode(), lang)
+                except Exception:  # noqa: BLE001 - pathological tree (e.g. RecursionError)
+                    logger.debug("extract() failed for %s; skipping refs/imports", f.rel_path)
+                    refs, raw_imports = [], []
+                if refs:
+                    self.refs.add([
+                        {
+                            "file_path": f.rel_path, "name": r.name, "line": r.line,
+                            "kind": r.kind, "container": r.container,
+                            "line_text": lines[r.line - 1].strip() if r.line <= len(lines) else "",
+                        }
+                        for r in refs
+                    ])
+                    refs_added += len(refs)
+                if raw_imports:
+                    rows = []
+                    for imp in raw_imports:
+                        target, status = resolve_import(imp.module, f.rel_path, lang, current_paths)
+                        rows.append({
+                            "file_path": f.rel_path, "module": imp.module, "line": imp.line,
+                            "target": target or "", "status": status,
+                        })
+                    self.imports.add(rows)
+                    imports_added += len(rows)
             known[f.rel_path] = f.digest
 
         if changed or deleted:
@@ -116,6 +195,7 @@ class IndexStore:
             # use_tantivy=False activates the native (non-tantivy) FTS backend, which supports
             # query_type="fts" in table.search(...) — required by Task 7.
             self.chunks.create_fts_index("text", use_tantivy=False, replace=True)
+        manifest["version"] = INDEX_VERSION
         self._save_manifest(manifest)
 
         return {
@@ -124,4 +204,6 @@ class IndexStore:
             "files_total": len(current),
             "chunks_added": chunks_added,
             "chunks_total": self.chunks.count_rows(),
+            "refs_added": refs_added,
+            "imports_added": imports_added,
         }

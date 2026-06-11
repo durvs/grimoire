@@ -1,3 +1,5 @@
+import json
+
 from grimoire_mcp.store import IndexStore
 from tests.conftest import fake_embed
 
@@ -45,6 +47,64 @@ def test_deleted_file_removes_chunks(sample_repo, monkeypatch, tmp_path):
     store.sync()
     rows = store.chunks.to_arrow().to_pylist()
     assert not any(r["file_path"] == "README.md" for r in rows)
+
+
+def test_sync_populates_refs_and_imports(sample_repo, monkeypatch, tmp_path):
+    monkeypatch.setattr("grimoire_mcp.config.GRIMOIRE_HOME", tmp_path / "h")
+    store = IndexStore(sample_repo, embed_fn=fake_embed)
+    store.sync()
+
+    refs = store.refs.to_arrow().to_pylist()
+    defs = {r["name"] for r in refs if r["kind"] == "def"}
+    assert "validate_cpf" in defs
+    cpf_def = next(r for r in refs if r["name"] == "validate_cpf" and r["kind"] == "def")
+    assert cpf_def["line_text"].startswith("def validate_cpf")
+
+    imports = store.imports.to_arrow().to_pylist()
+    by_module = {i["module"]: i for i in imports}
+    assert by_module["src.users"]["target"] == "src/users.py"
+    assert by_module["src.users"]["status"] == "resolved"
+    assert by_module["./utils"]["target"] == "src/utils.ts"
+    assert by_module["react"]["status"] == "external"
+    assert by_module["src.missing"]["status"] == "unresolved"
+
+
+def test_incremental_replaces_refs_and_imports(sample_repo, monkeypatch, tmp_path):
+    monkeypatch.setattr("grimoire_mcp.config.GRIMOIRE_HOME", tmp_path / "h")
+    store = IndexStore(sample_repo, embed_fn=fake_embed)
+    store.sync()
+    (sample_repo / "src" / "api.py").write_text("def renamed():\n    return 1\n")
+    store.sync()
+
+    refs = [r for r in store.refs.to_arrow().to_pylist() if r["file_path"] == "src/api.py"]
+    assert {r["name"] for r in refs} == {"renamed"}
+    imports = [i for i in store.imports.to_arrow().to_pylist() if i["file_path"] == "src/api.py"]
+    assert imports == []
+
+
+def test_deleted_file_cleans_refs_and_imports(sample_repo, monkeypatch, tmp_path):
+    monkeypatch.setattr("grimoire_mcp.config.GRIMOIRE_HOME", tmp_path / "h")
+    store = IndexStore(sample_repo, embed_fn=fake_embed)
+    store.sync()
+    (sample_repo / "src" / "api.py").unlink()
+    store.sync()
+    assert not any(r["file_path"] == "src/api.py" for r in store.refs.to_arrow().to_pylist())
+    assert not any(i["file_path"] == "src/api.py" for i in store.imports.to_arrow().to_pylist())
+
+
+def test_v1_manifest_triggers_full_reindex(sample_repo, monkeypatch, tmp_path):
+    monkeypatch.setattr("grimoire_mcp.config.GRIMOIRE_HOME", tmp_path / "h")
+    store = IndexStore(sample_repo, embed_fn=fake_embed)
+    store.sync()
+    # simula manifest v1: sem "version"
+    manifest = json.loads(store._manifest_path.read_text())
+    manifest.pop("version")
+    store._manifest_path.write_text(json.dumps(manifest))
+
+    store2 = IndexStore(sample_repo, embed_fn=fake_embed)
+    stats = store2.sync()
+    assert stats["files_indexed"] == 5  # re-index completo
+    assert store2.refs.count_rows() > 0
 
 
 def test_concurrent_syncs_do_not_duplicate_chunks(sample_repo, monkeypatch, tmp_path):
