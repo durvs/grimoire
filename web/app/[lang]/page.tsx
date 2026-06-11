@@ -6,7 +6,7 @@ const GITHUB_URL = "https://github.com/duurval/grimoire";
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="font-mono text-sm tracking-widest uppercase text-zinc-500">
+    <h2 className="font-mono text-sm tracking-widest uppercase text-zinc-400">
       <span className="mr-3 text-accent select-none" aria-hidden>
         ::
       </span>
@@ -22,7 +22,7 @@ export default async function Landing({
 }) {
   const { lang } = await params;
   if (!isLocale(lang)) notFound();
-  const t = getDictionary(lang as Locale);
+  const t = getDictionary(lang);
   const otherLang = lang === "pt" ? "en" : "pt";
 
   return (
@@ -97,7 +97,11 @@ export default async function Landing({
                 <span className="size-2.5 rounded-full bg-zinc-700" />
                 <span className="size-2.5 rounded-full bg-accent/60" />
               </div>
-              <div className="overflow-x-auto px-4 py-3.5">
+              <div
+                className="overflow-x-auto px-4 py-3.5"
+                tabIndex={0}
+                aria-label={t.hero.install}
+              >
                 <code className="font-mono text-[13px] whitespace-nowrap text-zinc-200 sm:text-sm">
                   <span className="mr-2 text-accent select-none" aria-hidden>
                     $
@@ -172,7 +176,7 @@ export default async function Landing({
                 key={item.title}
                 className="group bg-background p-6 transition-colors hover:bg-white/[0.02] sm:p-8"
               >
-                <p className="font-mono text-xs text-zinc-600 transition-colors group-hover:text-accent">
+                <p className="font-mono text-xs text-zinc-500 transition-colors group-hover:text-accent">
                   0{i + 1}
                 </p>
                 <h3 className="mt-3 text-base font-medium text-foreground">
@@ -205,7 +209,11 @@ export default async function Landing({
                   <p className="text-sm font-medium text-foreground">
                     {step.label}
                   </p>
-                  <div className="mt-3 overflow-x-auto rounded-lg border border-white/10 bg-black/50 px-4 py-3.5">
+                  <div
+                    className="mt-3 overflow-x-auto rounded-lg border border-white/10 bg-black/50 px-4 py-3.5"
+                    tabIndex={0}
+                    aria-label={step.code}
+                  >
                     <code className="font-mono text-[13px] whitespace-nowrap text-zinc-200 sm:text-sm">
                       <span
                         className="mr-2 text-accent select-none"

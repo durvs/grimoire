@@ -32,6 +32,10 @@ export async function generateMetadata({
     description: pt
       ? "Indexe seu código na sua máquina e entregue ao agente só os trechos que importam. Sem nuvem, sem Docker, sem API key."
       : "Index your codebase on your machine and hand your AI agent only the snippets that matter. No cloud, no Docker, no API key.",
+    alternates: {
+      canonical: `/${lang}`,
+      languages: { en: "/en", "pt-BR": "/pt" },
+    },
   };
 }
 
