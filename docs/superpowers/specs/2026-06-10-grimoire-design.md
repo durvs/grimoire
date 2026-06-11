@@ -20,7 +20,7 @@ Herança direta do `ai-modernization-pipeline` (chunking hierárquico, RAG, rast
 | Decisão | Escolha | Racional |
 |---|---|---|
 | Linguagem/framework | Python 3.11+, `fastmcp` 2.x, transporte stdio | Ecossistema RAG maduro (fastembed, tree-sitter, LanceDB); distribuição via `uvx` |
-| Embeddings | Locais, via fastembed; default `intfloat/multilingual-e5-small`, trocável via config | Custo zero, privado, sem API key; multilíngue cobre código em inglês + docs/regras em pt-BR |
+| Embeddings | Locais, via fastembed; default `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (384 dims), trocável via config | Custo zero, privado, sem API key; multilíngue cobre código em inglês + docs/regras em pt-BR. (`multilingual-e5-small` não é suportado pelo fastembed — verificado em 2026-06-10) |
 | Vector store | LanceDB embedded em `~/.grimoire/indexes/<hash-do-path>/` | Zero infra; vetor + FTS (BM25) no mesmo arquivo; índice fora do repo do usuário |
 | Busca | Híbrida: vetorial + BM25 com fusão RRF | Vetor cobre consultas conceituais; BM25 cobre identificadores exatos |
 | Chunking | Estrutural via tree-sitter (`tree-sitter-language-pack`): função/classe/método com contexto pai. Fallback: headers (Markdown), blocos (texto/config) | Chunks correspondem a unidades reais de código; não corta funções no meio |
