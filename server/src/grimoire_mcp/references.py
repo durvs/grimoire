@@ -72,7 +72,7 @@ def _walk(node, container, def_name_spans, refs, imports, source_bytes, lang):
                 return
         if kind == "call_expression":
             fn = node.child_by_field_name("function")
-            if fn is not None and _text(fn, source_bytes) == "require":
+            if fn is not None and (fn.kind() == "import" or _text(fn, source_bytes) == "require"):
                 imports.extend(_ts_import_source(node, source_bytes))
                 return
 
@@ -91,12 +91,23 @@ def _walk(node, container, def_name_spans, refs, imports, source_bytes, lang):
 
 def _python_imports(node, source_bytes) -> list[RawImport]:
     line = node.start_position().row + 1
-    text = _text(node, source_bytes)
     if node.kind() == "import_from_statement":
-        # "from ..a.b import x" -> "..a.b"
-        module = text.split("import", 1)[0].removeprefix("from").strip()
+        # Prefer the grammar field to avoid splitting on "import" inside the
+        # module name (e.g. `from importlib import metadata` or
+        # `from .importutils import helper`).
+        field = node.child_by_field_name("module_name")
+        if field is not None:
+            module = _text(field, source_bytes)
+        else:
+            # Fallback: text surgery (handles edge cases not covered by the
+            # grammar field, though in practice the field is always present).
+            text = _text(node, source_bytes)
+            module = text.split("import", 1)[0].removeprefix("from").strip()
         return [RawImport(module, line)]
     # "import a.b, c as d" -> ["a.b", "c"]
+    # removeprefix("import") is safe here: the module list always starts after
+    # the leading "import" keyword and cannot itself contain the word "import".
+    text = _text(node, source_bytes)
     body = text.removeprefix("import").strip()
     return [
         RawImport(part.strip().split(" as ")[0].strip(), line)

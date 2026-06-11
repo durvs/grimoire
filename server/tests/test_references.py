@@ -55,3 +55,17 @@ def test_lang_without_import_extractor_still_has_refs():
     refs, imports = _extract(go, "go", "main.go")
     assert any(r.name == "Soma" and r.kind == "def" for r in refs)
     assert imports == []
+
+
+def test_python_import_module_containing_word_import():
+    src = "from importlib import metadata\nfrom .importutils import helper\nfrom src.importers import load\n"
+    _, imports = _extract(src, "python", "src/api.py")
+    modules = {i.module for i in imports}
+    assert modules == {"importlib", ".importutils", "src.importers"}
+
+
+def test_ts_dynamic_import_captured():
+    src = 'const page = import("./dyn");\nasync function go() {\n  const m = await import("./dyn2");\n}\n'
+    _, imports = _extract(src, "typescript", "src/app.ts")
+    modules = {i.module for i in imports}
+    assert {"./dyn", "./dyn2"} <= modules
