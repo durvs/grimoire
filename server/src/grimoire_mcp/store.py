@@ -35,6 +35,13 @@ def _quote(value: str) -> str:
 
 
 class IndexStore:
+    """Índice persistente de um projeto (LanceDB + manifest de digests).
+
+    Não é seguro para múltiplos processos sincronizarem o mesmo projeto ao
+    mesmo tempo: o manifest é last-writer-wins. O pior caso é re-indexação
+    redundante, nunca corrupção silenciosa (delete-before-add converge).
+    """
+
     def __init__(self, project_root: Path, embed_fn: EmbedFn | None = None):
         self.root = Path(project_root).resolve()
         self.embed_fn = embed_fn or _default_embed
@@ -45,9 +52,14 @@ class IndexStore:
         self._manifest_path = self.dir / "manifest.json"
 
     def _load_manifest(self) -> dict:
-        if self._manifest_path.exists():
-            return json.loads(self._manifest_path.read_text())
-        return {"project_path": str(self.root), "files": {}}
+        # Manifest corrompido (crash no meio do write) → re-index completo, que
+        # é o comportamento de autocura do resto do design.
+        try:
+            manifest = json.loads(self._manifest_path.read_text())
+            manifest["files"]
+            return manifest
+        except (OSError, json.JSONDecodeError, KeyError):
+            return {"project_path": str(self.root), "files": {}}
 
     def _save_manifest(self, manifest: dict) -> None:
         self._manifest_path.write_text(json.dumps(manifest, indent=1))
@@ -74,7 +86,7 @@ class IndexStore:
 
         chunks_added = 0
         for f in changed:
-            text = f.path.read_text(errors="replace")
+            text = f.path.read_text(encoding="utf-8", errors="replace")
             chunks = chunk_file(f.rel_path, text)
             if chunks:
                 vectors = self.embed_fn(
