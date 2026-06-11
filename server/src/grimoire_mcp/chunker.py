@@ -57,6 +57,12 @@ def parse_tree(text: str, lang: str):
 
 
 def chunk_file(rel_path: str, text: str, tree=None) -> list[Chunk]:
+    """Divide o arquivo em chunks estruturais.
+
+    `tree`, se fornecida, DEVE ter vindo de `parse_tree(text, lang)` com o mesmo
+    `text` e a linguagem correspondente a `rel_path` — árvore de outro texto
+    produz offsets silenciosamente errados.
+    """
     lang = detect_language(rel_path)
     if lang == "markdown":
         return _chunk_markdown(rel_path, text)
