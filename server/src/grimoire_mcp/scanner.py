@@ -21,9 +21,13 @@ class ScannedFile:
 
 
 def _load_gitignore(root: Path) -> pathspec.PathSpec:
+    # Apenas o .gitignore da raiz é carregado; .gitignore aninhados não são suportados.
     gi = root / ".gitignore"
-    lines = gi.read_text().splitlines() if gi.exists() else []
-    return pathspec.PathSpec.from_lines("gitwildmatch", lines)
+    try:
+        lines = gi.read_text().splitlines()
+    except OSError:
+        lines = []
+    return pathspec.PathSpec.from_lines("gitignore", lines)
 
 
 def _is_text(path: Path) -> bool:
@@ -42,7 +46,7 @@ def scan(root: Path) -> list[ScannedFile]:
         dirnames[:] = [
             d for d in dirnames
             if d not in ALWAYS_IGNORE_DIRS
-            and not spec.match_file(str(Path(dirpath, d).relative_to(root)) + "/")
+            and not spec.match_file(Path(dirpath, d).relative_to(root).as_posix() + "/")
         ]
         for name in filenames:
             path = Path(dirpath) / name
