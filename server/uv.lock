@@ -571,6 +571,7 @@ dependencies = [
     { name = "fastmcp" },
     { name = "lancedb" },
     { name = "pathspec" },
+    { name = "pyarrow" },
     { name = "tree-sitter" },
     { name = "tree-sitter-language-pack" },
 ]
@@ -587,6 +588,7 @@ requires-dist = [
     { name = "fastmcp", specifier = ">=2.0" },
     { name = "lancedb", specifier = ">=0.21" },
     { name = "pathspec", specifier = ">=0.12" },
+    { name = "pyarrow", specifier = ">=14" },
     { name = "tree-sitter", specifier = ">=0.23" },
     { name = "tree-sitter-language-pack", specifier = ">=0.7" },
 ]

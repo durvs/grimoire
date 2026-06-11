@@ -12,6 +12,7 @@ dependencies = [
     "tree-sitter>=0.23",
     "tree-sitter-language-pack>=0.7",
     "pathspec>=0.12",
+    "pyarrow>=14",
 ]
 
 [project.scripts]
@@ -30,5 +31,6 @@ dev = ["pytest>=8.0", "pytest-asyncio>=0.24"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 markers = ["slow: testes que baixam o modelo de embedding real"]
 addopts = "-m 'not slow'"
