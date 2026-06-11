@@ -5,19 +5,71 @@ MCP server local de busca semântica em código. Indexa seu projeto na sua máqu
 (semântica + BM25) para agentes de IA — trechos certos em vez de arquivos inteiros.
 
 > **Status:** v0.1.0 (alpha) — ainda não publicado no PyPI.
+> Enquanto isso, troque `uvx grimoire-mcp` nos comandos abaixo por
+> `uv run --project /caminho/para/grimoire/server grimoire-mcp` (direto do clone).
 
-## Instalação (Claude Code)
+## Instalação
 
-Quando publicado no PyPI:
+### Claude Code
 
 ```bash
 claude mcp add grimoire -- uvx grimoire-mcp
 ```
 
-Por enquanto, direto do clone deste repo:
+### VS Code (GitHub Copilot)
 
 ```bash
-claude mcp add grimoire -- uv run --project /caminho/para/grimoire/server grimoire-mcp
+code --add-mcp '{"name":"grimoire","command":"uvx","args":["grimoire-mcp"]}'
+```
+
+Ou crie `.vscode/mcp.json` no projeto:
+
+```json
+{
+  "servers": {
+    "grimoire": { "type": "stdio", "command": "uvx", "args": ["grimoire-mcp"] }
+  }
+}
+```
+
+### Cursor
+
+`~/.cursor/mcp.json` (global) ou `.cursor/mcp.json` no projeto:
+
+```json
+{
+  "mcpServers": {
+    "grimoire": { "command": "uvx", "args": ["grimoire-mcp"] }
+  }
+}
+```
+
+### Codex CLI
+
+```bash
+codex mcp add grimoire -- uvx grimoire-mcp
+```
+
+### Gemini CLI
+
+```bash
+gemini mcp add grimoire uvx grimoire-mcp
+```
+
+### Windsurf
+
+`~/.codeium/windsurf/mcp_config.json` — mesmo formato `mcpServers` do Cursor.
+
+### Claude Desktop
+
+`claude_desktop_config.json` (Settings → Developer → Edit Config):
+
+```json
+{
+  "mcpServers": {
+    "grimoire": { "command": "uvx", "args": ["grimoire-mcp"] }
+  }
+}
 ```
 
 ## Tools

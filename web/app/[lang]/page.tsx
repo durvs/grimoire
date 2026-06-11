@@ -239,6 +239,45 @@ export default async function Landing({
               </li>
             ))}
           </ol>
+
+          {/* outros clientes MCP */}
+          <div className="mt-14">
+            <h3 className="font-mono text-xs tracking-widest uppercase text-zinc-400">
+              {t.clients.title}
+            </h3>
+            <div className="mt-5 divide-y divide-white/[0.06] overflow-hidden rounded-lg border border-white/[0.08]">
+              {t.clients.items.map((client) => (
+                <div
+                  key={client.name}
+                  className="flex flex-col gap-2 bg-white/[0.015] px-4 py-3.5 sm:flex-row sm:items-center sm:gap-6"
+                >
+                  <span className="w-40 shrink-0 text-sm font-medium text-foreground">
+                    {client.name}
+                  </span>
+                  <div
+                    className="min-w-0 flex-1 overflow-x-auto"
+                    tabIndex={0}
+                    aria-label={client.code}
+                  >
+                    <code className="font-mono text-[13px] whitespace-nowrap text-zinc-300">
+                      {client.code}
+                    </code>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 font-mono text-xs text-zinc-500">
+              {t.clients.more}{" "}
+              <a
+                href={GITHUB_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline decoration-zinc-700 underline-offset-2 transition-colors hover:text-accent"
+              >
+                README &#8599;
+              </a>
+            </p>
+          </div>
         </section>
 
         {/* roadmap */}

@@ -82,5 +82,27 @@
   },
   "footer": {
     "text": "Open source, MIT. Built for agents that read too much."
+  },
+  "clients": {
+    "title": "Works with your agent",
+    "items": [
+      {
+        "name": "Claude Code",
+        "code": "claude mcp add grimoire -- uvx grimoire-mcp"
+      },
+      {
+        "name": "VS Code (Copilot)",
+        "code": "code --add-mcp '{\"name\":\"grimoire\",\"command\":\"uvx\",\"args\":[\"grimoire-mcp\"]}'"
+      },
+      {
+        "name": "Codex CLI",
+        "code": "codex mcp add grimoire -- uvx grimoire-mcp"
+      },
+      {
+        "name": "Gemini CLI",
+        "code": "gemini mcp add grimoire uvx grimoire-mcp"
+      }
+    ],
+    "more": "Cursor, Windsurf and Claude Desktop: same MCP config (mcpServers) — see the README."
   }
 }
