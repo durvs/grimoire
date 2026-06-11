@@ -64,11 +64,7 @@
     "items": [
       {
         "version": "Hoje",
-        "desc": "Busca semântica híbrida em qualquer projeto local"
-      },
-      {
-        "version": "V1.1",
-        "desc": "Referências e grafo de dependências — quem chama essa função?"
+        "desc": "Busca semântica híbrida + referências e grafo de dependências — quem chama isso, o que quebra se mudar"
       },
       {
         "version": "V1.2",
@@ -77,6 +73,10 @@
       {
         "version": "V1.3",
         "desc": "Memória persistente de decisões por projeto"
+      },
+      {
+        "version": "V2",
+        "desc": "Watcher opcional, reranker local, multi-repo"
       }
     ]
   },

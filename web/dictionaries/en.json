@@ -64,11 +64,7 @@
     "items": [
       {
         "version": "Now",
-        "desc": "Hybrid semantic search over any local project"
-      },
-      {
-        "version": "V1.1",
-        "desc": "References & dependency graph — who calls this function?"
+        "desc": "Hybrid semantic search + references & dependency graph — who calls this, what breaks if it changes"
       },
       {
         "version": "V1.2",
@@ -77,6 +73,10 @@
       {
         "version": "V1.3",
         "desc": "Persistent per-project memory for decisions"
+      },
+      {
+        "version": "V2",
+        "desc": "Optional watcher, local reranker, multi-repo"
       }
     ]
   },
