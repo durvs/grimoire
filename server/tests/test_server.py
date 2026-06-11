@@ -16,7 +16,7 @@ def fast_embeddings(monkeypatch, tmp_path):
 async def test_index_then_search(sample_repo):
     async with Client(mcp) as client:
         stats = (await client.call_tool("index_project", {"project_path": str(sample_repo)})).data
-        assert stats["files_total"] == 3
+        assert stats["files_total"] == 5
 
         results = (await client.call_tool("search", {
             "query": "getUserById",

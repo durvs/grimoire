@@ -25,15 +25,34 @@ class UserService:
         return self.repo.find(user_id)
 '''
 
-SAMPLE_TS = '''export function getUserById(id: number): Promise<User> {
+SAMPLE_TS = '''import { formatMoney } from "./utils";
+import React from "react";
+
+export function getUserById(id: number): Promise<User> {
   return api.get(`/users/${id}`);
 }
 
 export class OrderService {
   calculateDiscount(total: number): number {
+    const label = formatMoney(total);
     return total > 100 ? total * 0.1 : 0;
   }
 }
+'''
+
+SAMPLE_UTILS_TS = '''export function formatMoney(value: number): string {
+  return `R$ ${value.toFixed(2)}`;
+}
+'''
+
+SAMPLE_API_PY = '''from src.users import validate_cpf
+from .users import UserService
+from src.missing import nothing
+import fastapi
+
+
+def create_user(doc: str) -> bool:
+    return validate_cpf(doc)
 '''
 
 SAMPLE_MD = '''# Projeto
@@ -55,6 +74,8 @@ def sample_repo(tmp_path):
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "users.py").write_text(SAMPLE_PY)
     (tmp_path / "src" / "orders.ts").write_text(SAMPLE_TS)
+    (tmp_path / "src" / "utils.ts").write_text(SAMPLE_UTILS_TS)
+    (tmp_path / "src" / "api.py").write_text(SAMPLE_API_PY)
     (tmp_path / "README.md").write_text(SAMPLE_MD)
     (tmp_path / ".gitignore").write_text("secret.txt\n")
     (tmp_path / "secret.txt").write_text("senha123")

@@ -6,7 +6,7 @@ def test_initial_sync_indexes_all_files(sample_repo, monkeypatch, tmp_path):
     monkeypatch.setattr("grimoire_mcp.config.GRIMOIRE_HOME", tmp_path / "h")
     store = IndexStore(sample_repo, embed_fn=fake_embed)
     stats = store.sync()
-    assert stats["files_indexed"] == 3   # users.py, orders.ts, README.md
+    assert stats["files_indexed"] == 5   # users.py, orders.ts, utils.ts, api.py, README.md
     assert stats["chunks_total"] > 0
     assert store.chunks.count_rows() == stats["chunks_total"]
 
