@@ -71,6 +71,8 @@ class IndexStore:
     Múltiplos processos apontando para o mesmo diretório de índice continuam
     sendo last-writer-wins (manifest), mas o pior caso é re-indexação
     redundante, nunca corrupção silenciosa (delete-before-add converge).
+    Exceção: durante a migração de versão do índice (drop+recreate), outro
+    processo com handles antigos pode ver erros de leitura até reiniciar.
     """
 
     def __init__(self, project_root: Path, embed_fn: EmbedFn | None = None):
