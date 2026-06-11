@@ -1,9 +1,12 @@
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 from tree_sitter_language_pack import get_parser
 
 from .config import BLOCK_CHUNK_LINES, MAX_CHUNK_LINES
+
+logger = logging.getLogger(__name__)
 
 EXT_LANG = {
     ".py": "python", ".ts": "typescript", ".tsx": "tsx",
@@ -55,18 +58,13 @@ def chunk_file(rel_path: str, text: str) -> list[Chunk]:
     if lang is not None:
         try:
             return _chunk_code(rel_path, text, lang)
-        except Exception:
-            pass  # gramática indisponível ou parse quebrado -> fallback
+        except Exception as exc:
+            logger.debug("chunker fallback for %s: %s", rel_path, exc)  # gramática indisponível ou parse quebrado -> fallback
     return _chunk_blocks(rel_path, text, lang or "text")
 
 
 def _slice(lines: list[str], start: int, end: int) -> str:
     return "\n".join(lines[start - 1:end])
-
-
-def _node_text(node, source_bytes: bytes) -> str:
-    """Extract source text for a node using byte offsets."""
-    return source_bytes[node.start_byte():node.end_byte()].decode(errors="replace")
 
 
 def _node_symbol(node, source_bytes: bytes) -> str:
@@ -140,31 +138,79 @@ def _chunk_definition(
     kind = DEFINITION_TYPES[node.kind()]
 
     if node.kind() in CONTAINER_TYPES and end - start + 1 > MAX_CHUNK_LINES:
-        # large container: header + each method as its own chunk
-        methods = _find_definitions(node)
+        # large container: header + each method as its own chunk + misc body lines
+        method_pairs = _find_definitions(node)  # list of (def_node, outer_node)
         out: list[Chunk] = []
+
         first_method_line = min(
-            (m.start_position().row + 1 for m in methods), default=end
+            (outer.start_position().row + 1 for _, outer in method_pairs),
+            default=end + 1,  # no methods: header spans entire class
         )
         out.append(Chunk(rel_path, start, first_method_line - 1, symbol, "class",
                          lang, _slice(lines, start, first_method_line - 1)))
-        for m in methods:
-            out.extend(_chunk_definition(m, m, rel_path, lines, source_bytes, lang, parent=symbol))
+
+        misc_start: int | None = None
+
+        def flush_misc_body(until_line: int) -> None:
+            nonlocal misc_start
+            if misc_start is None:
+                return
+            block = _slice(lines, misc_start, until_line)
+            if block.strip():
+                out.extend(_split_block(rel_path, block, misc_start, lang))
+            misc_start = None
+
+        prev_end = first_method_line - 1
+        for def_node, outer_node in method_pairs:
+            m_start = outer_node.start_position().row + 1
+            # accumulate any body lines between previous definition and this one
+            if m_start > prev_end + 1:
+                gap_start = prev_end + 1
+                if misc_start is None:
+                    misc_start = gap_start
+            else:
+                flush_misc_body(prev_end)
+            flush_misc_body(m_start - 1)
+            method_chunks = _chunk_definition(def_node, outer_node, rel_path, lines, source_bytes, lang, parent=symbol)
+            out.extend(method_chunks)
+            prev_end = outer_node.end_position().row + 1
+
+        # trailing body lines after last method
+        if prev_end < end:
+            misc_start = prev_end + 1
+            flush_misc_body(end)
+
         return out
 
     return [Chunk(rel_path, start, end, symbol, kind, lang, _slice(lines, start, end))]
 
 
 def _find_definitions(node) -> list:
-    """Find definitions directly in node or one level below (covers body/block)."""
+    """Find definitions directly in node or one level below (covers body/block).
+
+    Wrapper nodes (decorated_definition, export_statement) are unwrapped so the
+    inner definition is returned with its outer node as span carrier — represented
+    as a (def_node, outer_node) pair when the wrapper is present, or a plain node
+    when there is no wrapper.  Callers must handle both forms.
+    """
     result = []
     for child in _node_children(node):
         if child.kind() in DEFINITION_TYPES:
-            result.append(child)
+            result.append((child, child))
+        elif child.kind() in WRAPPER_TYPES:
+            for inner in _node_children(child):
+                if inner.kind() in DEFINITION_TYPES:
+                    result.append((inner, child))
+                    break
         else:
             for grandchild in _node_children(child):
                 if grandchild.kind() in DEFINITION_TYPES:
-                    result.append(grandchild)
+                    result.append((grandchild, grandchild))
+                elif grandchild.kind() in WRAPPER_TYPES:
+                    for inner in _node_children(grandchild):
+                        if inner.kind() in DEFINITION_TYPES:
+                            result.append((inner, grandchild))
+                            break
     return result
 
 
