@@ -45,3 +45,34 @@ def test_deleted_file_removes_chunks(sample_repo, monkeypatch, tmp_path):
     store.sync()
     rows = store.chunks.to_arrow().to_pylist()
     assert not any(r["file_path"] == "README.md" for r in rows)
+
+
+def test_concurrent_syncs_do_not_duplicate_chunks(sample_repo, monkeypatch, tmp_path):
+    import threading
+
+    monkeypatch.setattr("grimoire_mcp.config.GRIMOIRE_HOME", tmp_path / "h")
+    store = IndexStore(sample_repo, embed_fn=fake_embed)
+    store.sync()
+    baseline = store.chunks.count_rows()
+
+    (sample_repo / "src" / "users.py").write_text("def changed():\n    return 2\n")
+
+    errors = []
+
+    def worker():
+        try:
+            store.sync()
+        except Exception as e:  # noqa: BLE001
+            errors.append(e)
+
+    threads = [threading.Thread(target=worker) for _ in range(6)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors
+    rows = store.chunks.to_arrow().to_pylist()
+    users = [r for r in rows if r["file_path"] == "src/users.py"]
+    assert {r["symbol"] for r in users} == {"changed"}
+    assert len(users) == 1

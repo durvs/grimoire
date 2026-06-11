@@ -1,4 +1,5 @@
 import json
+import threading
 from collections.abc import Callable
 from pathlib import Path
 
@@ -37,8 +38,10 @@ def _quote(value: str) -> str:
 class IndexStore:
     """Índice persistente de um projeto (LanceDB + manifest de digests).
 
-    Não é seguro para múltiplos processos sincronizarem o mesmo projeto ao
-    mesmo tempo: o manifest é last-writer-wins. O pior caso é re-indexação
+    Sincronizações simultâneas no mesmo processo são serializadas pelo
+    `_sync_lock`: apenas uma thread executa `sync()` por vez nesta instância.
+    Múltiplos processos apontando para o mesmo diretório de índice continuam
+    sendo last-writer-wins (manifest), mas o pior caso é re-indexação
     redundante, nunca corrupção silenciosa (delete-before-add converge).
     """
 
@@ -50,6 +53,7 @@ class IndexStore:
         self.db = lancedb.connect(self.dir)
         self.chunks = self.db.create_table("chunks", schema=_schema(), exist_ok=True)
         self._manifest_path = self.dir / "manifest.json"
+        self._sync_lock = threading.Lock()
 
     def _load_manifest(self) -> dict:
         # Manifest corrompido (crash no meio do write) → re-index completo, que
@@ -65,6 +69,10 @@ class IndexStore:
         self._manifest_path.write_text(json.dumps(manifest, indent=1))
 
     def sync(self) -> dict:
+        with self._sync_lock:
+            return self._sync_locked()
+
+    def _sync_locked(self) -> dict:
         manifest = self._load_manifest()
         known: dict[str, str] = manifest["files"]
         all_scanned = scan(self.root)

@@ -15,7 +15,7 @@ def fast_embeddings(monkeypatch, tmp_path):
 
 async def test_index_then_search(sample_repo):
     async with Client(mcp) as client:
-        stats = (await client.call_tool("index_project", {"path": str(sample_repo)})).data
+        stats = (await client.call_tool("index_project", {"project_path": str(sample_repo)})).data
         assert stats["files_total"] == 3
 
         results = (await client.call_tool("search", {
@@ -39,6 +39,13 @@ async def test_outline(sample_repo):
 
 async def test_status_lists_indexed_projects(sample_repo):
     async with Client(mcp) as client:
-        await client.call_tool("index_project", {"path": str(sample_repo)})
+        await client.call_tool("index_project", {"project_path": str(sample_repo)})
         status = (await client.call_tool("status", {})).data
         assert any(p["project_path"] == str(sample_repo) for p in status)
+
+
+async def test_index_project_rejects_missing_path():
+    async with Client(mcp) as client:
+        with pytest.raises(Exception) as exc_info:
+            await client.call_tool("index_project", {"project_path": "/caminho/que/nao/existe"})
+        assert "não encontrado" in str(exc_info.value)

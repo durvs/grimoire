@@ -18,6 +18,7 @@ Security / robustness additions beyond the plan template:
 """
 
 import json
+import threading
 from pathlib import Path
 
 from fastmcp import FastMCP
@@ -38,19 +39,23 @@ mcp = FastMCP(
 
 _EMBED_FN = None  # testes injetam fake; produção usa o default do IndexStore
 _STORES: dict[str, IndexStore] = {}
+_stores_lock = threading.Lock()
 
 
 def _store_for(project_path: str) -> IndexStore:
+    if not Path(project_path).is_dir():
+        raise ValueError(f"projeto não encontrado: {project_path}")
     root = str(Path(project_path).resolve())
-    if root not in _STORES:
-        _STORES[root] = IndexStore(Path(root), embed_fn=_EMBED_FN)
-    return _STORES[root]
+    with _stores_lock:
+        if root not in _STORES:
+            _STORES[root] = IndexStore(Path(root), embed_fn=_EMBED_FN)
+        return _STORES[root]
 
 
 @mcp.tool
-def index_project(path: str) -> dict:
+def index_project(project_path: str) -> dict:
     """Indexa (ou atualiza incrementalmente) um projeto para busca semântica."""
-    return _store_for(path).sync()
+    return _store_for(project_path).sync()
 
 
 @mcp.tool
@@ -65,6 +70,11 @@ def search(
 
     Retorna trechos com file, start_line/end_line, symbol e score.
     Aceita consultas conceituais ("onde valida CPF") e identificadores exatos.
+
+    Valores aceitos para `language`: python, typescript, tsx, javascript, java,
+    go, ruby, rust, php, kotlin, c, cpp, c_sharp, swift, markdown, text
+    (fallback para extensões não reconhecidas).
+    Atenção: arquivos `.tsx` têm language "tsx", não "typescript".
     """
     return hybrid_search(
         _store_for(project_path), query,
@@ -97,7 +107,7 @@ def outline(project_path: str, file_path: str) -> list[dict]:
 
 @mcp.tool
 def status() -> list[dict]:
-    """Lista projetos indexados com contagem de chunks."""
+    """Lista projetos indexados com contagem de arquivos."""
     indexes = config.GRIMOIRE_HOME / "indexes"
     out = []
     if indexes.exists():
