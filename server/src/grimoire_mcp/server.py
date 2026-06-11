@@ -25,6 +25,7 @@ from fastmcp import FastMCP
 
 from . import config
 from .chunker import chunk_file
+from .rules import EXTRACTION_INSTRUCTIONS, RULE_CATEGORIES, is_test_path, rule_id, rule_signal_score
 from .search import hybrid_search
 from .store import IndexStore, _quote
 
@@ -35,7 +36,9 @@ mcp = FastMCP(
         "arquivos inteiros: ela retorna só os trechos relevantes com file:line. "
         "Use `outline` para ver a estrutura de um arquivo sem carregar os corpos. "
         "Use `find_references` para 'quem usa/chama X', `dependencies_of`/`dependents_of` "
-        "para navegar o grafo de imports."
+        "para navegar o grafo de imports. "
+        "Para regras de negócio: `extract_rules` → você extrai → `save_rules`; "
+        "consulte com `rules` ou via `search`."
     ),
 )
 
@@ -180,6 +183,116 @@ def status() -> list[dict]:
             except (OSError, json.JSONDecodeError, KeyError):
                 continue
     return out
+
+
+CANDIDATE_KINDS = {"function", "method", "section"}
+
+
+@mcp.tool
+def extract_rules(
+    project_path: str, scope: str | None = None, batch: int = 10, cursor: int = 0,
+) -> dict:
+    """Prepara a extração de regras de negócio: retorna chunks candidatos + instruções.
+
+    Você (o agente) extrai as regras dos chunks e as persiste via `save_rules`.
+    Use `scope` (arquivo ou diretório) para limitar; siga `next_cursor` até null.
+    """
+    store = _store_for(project_path)
+    store.sync()
+    prefix = _rel_inside(project_path, scope) if scope else None
+    rows = store.chunks.to_arrow().to_pylist()
+    candidates = sorted(
+        (
+            (rule_signal_score(r["text"]), r)
+            for r in rows
+            if r["kind"] in CANDIDATE_KINDS
+            and not is_test_path(r["file_path"])
+            and (prefix is None or r["file_path"] == prefix
+                 or r["file_path"].startswith(prefix.rstrip("/") + "/"))
+            and rule_signal_score(r["text"]) > 0
+        ),
+        key=lambda sr: (-sr[0], sr[1]["file_path"], sr[1]["start_line"]),
+    )
+    page = candidates[cursor:cursor + batch]
+    next_cursor = cursor + batch if cursor + batch < len(candidates) else None
+    return {
+        "instructions": EXTRACTION_INSTRUCTIONS,
+        "chunks": [
+            {"file": r["file_path"], "start_line": r["start_line"],
+             "end_line": r["end_line"], "symbol": r["symbol"], "kind": r["kind"],
+             "text": r["text"]}
+            for _, r in page
+        ],
+        "next_cursor": next_cursor,
+        "remaining": max(0, len(candidates) - (cursor + batch)),
+    }
+
+
+@mcp.tool
+def save_rules(project_path: str, rules: list[dict]) -> dict:
+    """Valida e persiste regras de negócio extraídas; itens inválidos voltam em rejected."""
+    store = _store_for(project_path)
+    store.sync()
+    manifest_files = json.loads(store._manifest_path.read_text())["files"]
+    valid_rows, rejected = [], []
+    for item in rules:
+        reason = _validate_rule(item, project_path, manifest_files)
+        if reason is not None:
+            rejected.append({"item": item, "reason": reason})
+            continue
+        rel = _rel_inside(project_path, item["file"])
+        valid_rows.append({
+            "id": rule_id(rel, item["rule"]), "file_path": rel,
+            "start_line": int(item["start_line"]), "end_line": int(item["end_line"]),
+            "rule": item["rule"], "category": item["category"],
+            "confidence": float(item["confidence"]),
+            "file_digest": manifest_files[rel],
+        })
+    saved = store.save_rules_rows(valid_rows)
+    return {"saved": saved, "rejected": rejected}
+
+
+def _validate_rule(item: dict, project_path: str, manifest_files: dict) -> str | None:
+    rule = item.get("rule") or ""
+    if not rule.strip():
+        return "rule vazio"
+    if item.get("category") not in RULE_CATEGORIES:
+        return f"category inválida: {item.get('category')!r} (use {sorted(RULE_CATEGORIES)})"
+    try:
+        confidence = float(item.get("confidence", -1))
+    except (TypeError, ValueError):
+        return "confidence não numérico"
+    if not 0.0 <= confidence <= 1.0:
+        return "confidence fora de [0, 1]"
+    try:
+        start, end = int(item["start_line"]), int(item["end_line"])
+    except (KeyError, TypeError, ValueError):
+        return "start_line/end_line ausentes ou não inteiros"
+    if not 1 <= start <= end:
+        return f"start_line/end_line inválidos: {start}..{end}"
+    try:
+        rel = _rel_inside(project_path, item.get("file", ""))
+    except ValueError:
+        return "file fora do projeto"
+    if rel not in manifest_files:
+        return f"file não indexado: {rel}"
+    return None
+
+
+@mcp.tool
+def rules(project_path: str, file_path: str | None = None) -> list[dict]:
+    """Lista regras de negócio extraídas, com flag stale (código mudou desde a extração)."""
+    store = _store_for(project_path)
+    store.sync()
+    rel = _rel_inside(project_path, file_path) if file_path else None
+    return store.list_rules(rel)
+
+
+@mcp.tool
+def delete_rule(project_path: str, rule_id: str) -> dict:
+    """Remove uma regra (tabela + espelho na busca)."""
+    store = _store_for(project_path)
+    return {"deleted": store.delete_rule_row(rule_id)}
 
 
 def main() -> None:

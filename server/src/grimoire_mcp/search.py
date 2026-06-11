@@ -21,8 +21,10 @@ def _build_where(language: str | None, path_prefix: str | None) -> str | None:
 
 
 def _ranked(rows: list[dict]) -> dict[str, tuple[int, dict]]:
+    # Use symbol as key when available to avoid collisions between rule chunks
+    # and code chunks that happen to share the same file_path:start_line.
     return {
-        f"{r['file_path']}:{r['start_line']}": (rank, r)
+        r.get("symbol") or f"{r['file_path']}:{r['start_line']}": (rank, r)
         for rank, r in enumerate(rows)
     }
 

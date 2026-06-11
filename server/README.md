@@ -4,7 +4,7 @@ MCP server local de busca semântica em código. Indexa seu projeto na sua máqu
 (embeddings locais via fastembed, índice LanceDB) e expõe busca híbrida
 (semântica + BM25) para agentes de IA — trechos certos em vez de arquivos inteiros.
 
-> **Status:** v0.2.0 (alpha) — ainda não publicado no PyPI.
+> **Status:** v0.3.0 (alpha) — ainda não publicado no PyPI.
 > Enquanto isso, troque `uvx grimoire-mcp` nos comandos abaixo por
 > `uv run --project /caminho/para/grimoire/server grimoire-mcp` (direto do clone).
 
@@ -83,6 +83,10 @@ gemini mcp add grimoire uvx grimoire-mcp
 | `find_references(symbol, project_path, limit)` | Definições e usos exatos de um identificador |
 | `dependencies_of(file_path, project_path)` | Imports do arquivo: locais resolvidos, externos, não resolvidos |
 | `dependents_of(file_path, project_path)` | Quem importa o arquivo (impacto reverso) |
+| `extract_rules(project_path, scope, batch, cursor)` | Chunks candidatos + instruções para o agente extrair regras |
+| `save_rules(project_path, rules)` | Valida e persiste regras com rastreabilidade file:line |
+| `rules(project_path, file_path)` | Lista regras extraídas (com flag stale) |
+| `delete_rule(project_path, rule_id)` | Remove uma regra |
 
 O índice fica em `~/.grimoire/indexes/` — nada é gravado dentro dos seus repos.
 

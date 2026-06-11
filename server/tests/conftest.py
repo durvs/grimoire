@@ -25,20 +25,25 @@ class UserService:
         return self.repo.find(user_id)
 '''
 
-SAMPLE_TS = '''import { formatMoney } from "./utils";
-import React from "react";
-
-export function getUserById(id: number): Promise<User> {
-  return api.get(`/users/${id}`);
-}
-
-export class OrderService {
-  calculateDiscount(total: number): number {
-    const label = formatMoney(total);
-    return total > 100 ? total * 0.1 : 0;
-  }
-}
-'''
+SAMPLE_TS = (
+    'import { formatMoney } from "./utils";\n'
+    'import React from "react";\n'
+    '\n'
+    'export function getUserById(id: number): Promise<User> {\n'
+    '  return api.get(`/users/${id}`);\n'
+    '}\n'
+    '\n'
+    'export class OrderService {\n'
+    '  calculateDiscount(total: number): number {\n'
+    '    const label = formatMoney(total);\n'
+    '    return total > 100 ? total * 0.1 : 0;\n'
+    '  }\n'
+    + ''.join(
+        f'  pad{i}(): void {{\n' + ''.join(f'    const x{j} = {j};\n' for j in range(5)) + '  }\n'
+        for i in range(25)
+    )
+    + '}\n'
+)
 
 SAMPLE_UTILS_TS = '''export function formatMoney(value: number): string {
   return `R$ ${value.toFixed(2)}`;

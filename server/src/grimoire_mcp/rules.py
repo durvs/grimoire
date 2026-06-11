@@ -58,5 +58,6 @@ Um chunk pode ter zero, uma ou várias regras. Não invente regra de chunk que
 não tem semântica de negócio. Ao terminar o lote, chame a tool `save_rules`
 com a lista; itens inválidos voltam em `rejected` com o motivo — corrija e
 re-envie só esses. Se `next_cursor` não for null, chame `extract_rules` de
-novo com ele para continuar.
+novo com ele para continuar. Cada item rejeitado volta com o objeto original em
+`item` — corrija e re-envie exatamente esses.
 """

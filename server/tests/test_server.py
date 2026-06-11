@@ -92,3 +92,89 @@ async def test_dependencies_of_rejects_escape(sample_repo):
                 "file_path": "../../etc/passwd",
                 "project_path": str(sample_repo),
             })
+
+
+async def test_extract_rules_returns_candidates_and_instructions(sample_repo):
+    async with Client(mcp) as client:
+        out = (await client.call_tool("extract_rules", {
+            "project_path": str(sample_repo), "batch": 2,
+        })).data
+        assert "save_rules" in out["instructions"]
+        assert 0 < len(out["chunks"]) <= 2
+        chunk = out["chunks"][0]
+        assert {"file", "start_line", "end_line", "symbol", "kind", "text"} <= set(chunk)
+        # candidato óbvio: calculateDiscount tem condicional e comparação
+        all_chunks = out["chunks"]
+        cursor = out["next_cursor"]
+        while cursor is not None:
+            page = (await client.call_tool("extract_rules", {
+                "project_path": str(sample_repo), "batch": 2, "cursor": cursor,
+            })).data
+            all_chunks += page["chunks"]
+            cursor = page["next_cursor"]
+        assert any(c["symbol"] == "OrderService.calculateDiscount" for c in all_chunks)
+        # paginação não repete
+        keys = [(c["file"], c["start_line"]) for c in all_chunks]
+        assert len(keys) == len(set(keys))
+
+
+async def test_save_rules_validates_per_item(sample_repo):
+    async with Client(mcp) as client:
+        good = {
+            "rule": "Desconto de 10% para totais acima de 100",
+            "category": "calculation", "file": "src/orders.ts",
+            "start_line": 10, "end_line": 12, "confidence": 0.9,
+        }
+        bad_category = {**good, "rule": "x", "category": "banana"}
+        bad_lines = {**good, "rule": "y", "start_line": 9, "end_line": 3}
+        bad_file = {**good, "rule": "z", "file": "src/nao_existe.ts"}
+        out = (await client.call_tool("save_rules", {
+            "project_path": str(sample_repo),
+            "rules": [good, bad_category, bad_lines, bad_file],
+        })).data
+        assert len(out["saved"]) == 1
+        reasons = " | ".join(r["reason"] for r in out["rejected"])
+        assert len(out["rejected"]) == 3
+        assert "category" in reasons and "line" in reasons.lower()
+        # amendment 1: rejected items echo full original item
+        assert out["rejected"][0]["item"]["category"] == "banana"
+
+
+async def test_rules_listing_and_delete(sample_repo):
+    async with Client(mcp) as client:
+        save = (await client.call_tool("save_rules", {
+            "project_path": str(sample_repo),
+            "rules": [{
+                "rule": "CPF deve ter 11 dígitos", "category": "validation",
+                "file": "src/users.py", "start_line": 6, "end_line": 8,
+                "confidence": 0.95,
+            }],
+        })).data
+        rid = save["saved"][0]
+
+        listed = (await client.call_tool("rules", {"project_path": str(sample_repo)})).data
+        mine = next(r for r in listed if r["id"] == rid)
+        assert mine["stale"] is False and mine["file"] == "src/users.py"
+
+        results = (await client.call_tool("search", {
+            "query": "CPF deve ter 11 dígitos", "project_path": str(sample_repo),
+        })).data
+        assert any(r["kind"] == "rule" for r in results)
+
+        out = (await client.call_tool("delete_rule", {
+            "project_path": str(sample_repo), "rule_id": rid,
+        })).data
+        assert out["deleted"] is True
+        out = (await client.call_tool("delete_rule", {
+            "project_path": str(sample_repo), "rule_id": rid,
+        })).data
+        assert out["deleted"] is False
+
+
+async def test_extract_rules_scope_guard(sample_repo):
+    import pytest as _pytest
+    async with Client(mcp) as client:
+        with _pytest.raises(Exception):
+            await client.call_tool("extract_rules", {
+                "project_path": str(sample_repo), "scope": "../../etc",
+            })
