@@ -1,0 +1,34 @@
+[project]
+name = "grimoire-mcp"
+version = "0.1.0"
+description = "Local semantic code search MCP server - surgical context retrieval for AI agents"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "fastmcp>=2.0",
+    "fastembed>=0.6",
+    "lancedb>=0.21",
+    "tree-sitter>=0.23",
+    "tree-sitter-language-pack>=0.7",
+    "pathspec>=0.12",
+]
+
+[project.scripts]
+grimoire-mcp = "grimoire_mcp.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/grimoire_mcp"]
+
+[dependency-groups]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = ["slow: testes que baixam o modelo de embedding real"]
+addopts = "-m 'not slow'"
