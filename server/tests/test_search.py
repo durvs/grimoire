@@ -32,3 +32,17 @@ def test_language_filter(sample_repo, monkeypatch, tmp_path):
     results = hybrid_search(store, "service", top_k=10, language="python")
     assert results
     assert all(r["file"].endswith(".py") for r in results)
+
+
+def test_blank_query_returns_nothing(sample_repo, monkeypatch, tmp_path):
+    store = _store(sample_repo, monkeypatch, tmp_path)
+    assert hybrid_search(store, "   ") == []
+
+
+def test_path_prefix_is_literal_not_wildcard(sample_repo, monkeypatch, tmp_path):
+    store = _store(sample_repo, monkeypatch, tmp_path)
+    results = hybrid_search(store, "service", top_k=10, path_prefix="src/")
+    assert results
+    assert all(r["file"].startswith("src/") for r in results)
+    # % não é curinga: nenhum arquivo começa com "%.ts" literalmente
+    assert hybrid_search(store, "service", top_k=10, path_prefix="%.ts") == []

@@ -1,4 +1,8 @@
+import logging
+
 from .store import IndexStore, _quote
+
+logger = logging.getLogger(__name__)
 
 RRF_K = 60
 CANDIDATES = 30
@@ -10,7 +14,9 @@ def _build_where(language: str | None, path_prefix: str | None) -> str | None:
     if language:
         parts.append(f"language = {_quote(language)}")
     if path_prefix:
-        parts.append(f"file_path LIKE {_quote(path_prefix + '%')}")
+        # starts_with trata o prefixo como literal; LIKE deixaria % e _ vivos
+        # como curingas (test_utils/ casaria test-utils/).
+        parts.append(f"starts_with(file_path, {_quote(path_prefix)})")
     return " AND ".join(parts) or None
 
 
@@ -28,6 +34,8 @@ def hybrid_search(
     language: str | None = None,
     path_prefix: str | None = None,
 ) -> list[dict]:
+    if not query.strip():
+        return []
     store.sync()  # lazy: índice sempre fresco antes de buscar
     if store.chunks.count_rows() == 0:
         return []
@@ -44,8 +52,10 @@ def hybrid_search(
     vector_rows = vq.to_list()
     try:
         fts_rows = fq.to_list()
-    except Exception:
-        fts_rows = []  # query FTS inválida (só pontuação etc.) não derruba a busca
+    except Exception as exc:
+        # Query FTS inválida (só pontuação etc.) não derruba a busca.
+        logger.debug("FTS indisponível para %r: %s", query, exc)
+        fts_rows = []
 
     scores: dict[str, float] = {}
     rows_by_key: dict[str, dict] = {}
