@@ -69,3 +69,50 @@ def test_ts_dynamic_import_captured():
     _, imports = _extract(src, "typescript", "src/app.ts")
     modules = {i.module for i in imports}
     assert {"./dyn", "./dyn2"} <= modules
+
+
+# --- resolve_import (Task 4) ---
+
+from grimoire_mcp.references import resolve_import
+
+FILES = {
+    "src/users.py", "src/api.py", "src/orders.ts", "src/utils.ts",
+    "src/pkg/__init__.py", "lib/index.ts", "README.md",
+}
+
+
+def test_resolve_python_dotted():
+    assert resolve_import("src.users", "src/api.py", "python", FILES) == ("src/users.py", "resolved")
+
+
+def test_resolve_python_relative():
+    assert resolve_import(".users", "src/api.py", "python", FILES) == ("src/users.py", "resolved")
+
+
+def test_resolve_python_package_init():
+    assert resolve_import("src.pkg", "src/api.py", "python", FILES) == ("src/pkg/__init__.py", "resolved")
+
+
+def test_resolve_python_external():
+    assert resolve_import("fastapi", "src/api.py", "python", FILES) == (None, "external")
+
+
+def test_resolve_python_unresolved_local():
+    # primeiro segmento "src" existe no repo -> parece local -> unresolved
+    assert resolve_import("src.missing", "src/api.py", "python", FILES) == (None, "unresolved")
+
+
+def test_resolve_ts_relative_without_extension():
+    assert resolve_import("./utils", "src/orders.ts", "typescript", FILES) == ("src/utils.ts", "resolved")
+
+
+def test_resolve_ts_index():
+    assert resolve_import("../lib", "src/orders.ts", "typescript", FILES) == ("lib/index.ts", "resolved")
+
+
+def test_resolve_ts_package_external():
+    assert resolve_import("react", "src/orders.ts", "typescript", FILES) == (None, "external")
+
+
+def test_resolve_ts_relative_missing_is_unresolved():
+    assert resolve_import("./nope", "src/orders.ts", "typescript", FILES) == (None, "unresolved")
