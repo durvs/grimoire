@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDictionary, isLocale, type Locale } from "@/lib/i18n";
 
-const GITHUB_URL = "https://github.com/duurval/grimoire";
+const GITHUB_URL = "https://github.com/durvs/grimoire";
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
