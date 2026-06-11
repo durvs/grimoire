@@ -64,11 +64,7 @@
     "items": [
       {
         "version": "Now",
-        "desc": "Hybrid semantic search + references & dependency graph — who calls this, what breaks if it changes"
-      },
-      {
-        "version": "V1.2",
-        "desc": "Business-rule extraction with file:line traceability"
+        "desc": "Hybrid search, references & dependency graph, and business-rule extraction with file:line traceability"
       },
       {
         "version": "V1.3",

@@ -64,11 +64,7 @@
     "items": [
       {
         "version": "Hoje",
-        "desc": "Busca semântica híbrida + referências e grafo de dependências — quem chama isso, o que quebra se mudar"
-      },
-      {
-        "version": "V1.2",
-        "desc": "Extração de regras de negócio com rastreabilidade file:line"
+        "desc": "Busca híbrida, referências e grafo de dependências, e extração de regras de negócio com rastreabilidade file:line"
       },
       {
         "version": "V1.3",
