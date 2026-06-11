@@ -1,0 +1,42 @@
+{
+  "nav": { "github": "GitHub", "switchLang": "English" },
+  "hero": {
+    "tagline": "Busca semântica local para agentes de IA",
+    "title": "Sua janela de contexto acaba antes do seu problema.",
+    "subtitle": "O Grimoire indexa seu código na sua máquina e entrega ao agente só os trechos que importam — com arquivo e linha. Sem nuvem, sem Docker, sem API key.",
+    "cta": "Comece agora",
+    "install": "claude mcp add grimoire -- uvx grimoire-mcp"
+  },
+  "math": {
+    "title": "A conta dos tokens",
+    "before": { "label": "Sem Grimoire", "value": "~80 mil tokens", "desc": "O agente relê 15 arquivos inteiros para responder uma pergunta" },
+    "after": { "label": "Com Grimoire", "value": "~2 mil tokens", "desc": "O agente recebe os 5 trechos que realmente importam" },
+    "footnote": "Mesma resposta. 40x menos contexto."
+  },
+  "how": {
+    "title": "Como funciona",
+    "items": [
+      { "title": "Chunking estrutural", "desc": "tree-sitter corta o código em unidades reais — funções, classes, métodos — nunca blocos cegos de texto." },
+      { "title": "Busca híbrida", "desc": "Busca vetorial para conceitos (\"onde valida CPF?\") + BM25 para identificadores exatos (getUserById). Fundidas com RRF." },
+      { "title": "Zero infraestrutura", "desc": "Embeddings rodam localmente. O índice é um arquivo no disco. Seu código nunca sai da sua máquina." },
+      { "title": "Sempre fresco", "desc": "Cada busca re-indexa só os arquivos que mudaram. Sem daemon, sem resultado obsoleto." }
+    ]
+  },
+  "quickstart": {
+    "title": "Comece em um minuto",
+    "steps": [
+      { "label": "Adicione ao Claude Code", "code": "claude mcp add grimoire -- uvx grimoire-mcp" },
+      { "label": "Pergunte ao agente", "code": "\"busque no projeto onde o desconto é calculado\"" }
+    ]
+  },
+  "roadmap": {
+    "title": "Roadmap",
+    "items": [
+      { "version": "Hoje", "desc": "Busca semântica híbrida em qualquer projeto local" },
+      { "version": "V1.1", "desc": "Referências e grafo de dependências — quem chama essa função?" },
+      { "version": "V1.2", "desc": "Extração de regras de negócio com rastreabilidade file:line" },
+      { "version": "V1.3", "desc": "Memória persistente de decisões por projeto" }
+    ]
+  },
+  "footer": { "text": "Open source, MIT. Feito para agentes que leem demais." }
+}
