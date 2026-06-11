@@ -229,3 +229,31 @@ def test_concurrent_syncs_do_not_duplicate_chunks(sample_repo, monkeypatch, tmp_
     users = [r for r in rows if r["file_path"] == "src/users.py"]
     assert {r["symbol"] for r in users} == {"changed"}
     assert len(users) == 1
+
+
+def test_concurrent_save_rules_no_duplicates(sample_repo, monkeypatch, tmp_path):
+    import threading
+
+    monkeypatch.setattr("grimoire_mcp.config.GRIMOIRE_HOME", tmp_path / "h")
+    store = IndexStore(sample_repo, embed_fn=fake_embed)
+    store.sync()
+    row = _rule_row("src/orders.ts", _digest_of(store, "src/orders.ts"))
+
+    errors = []
+
+    def worker():
+        try:
+            store.save_rules_rows([dict(row)])
+        except Exception as e:  # noqa: BLE001
+            errors.append(e)
+
+    threads = [threading.Thread(target=worker) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors
+    assert store.rules.count_rows() == 1
+    mirror = [c for c in store.chunks.to_arrow().to_pylist() if c["kind"] == "rule"]
+    assert len(mirror) == 1

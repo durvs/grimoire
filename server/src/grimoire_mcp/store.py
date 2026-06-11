@@ -238,18 +238,20 @@ class IndexStore:
     def save_rules_rows(self, rows: list[dict]) -> list[str]:
         """Upsert por id na tabela rules + espelho kind="rule" no índice de busca.
 
-        Persiste na tabela primeiro; se o embedding do espelho falhar, a regra
-        não se perde (o re-espelho do próximo sync recupera).
+        Persiste na tabela primeiro; se o embedding do espelho falhar, o erro
+        propaga (a regra não se perde) e um retry de save_rules refaz o espelho.
+        Serializado com o sync pelo mesmo lock — tools rodam no thread pool.
         """
         if not rows:
             return []
-        ids = [r["id"] for r in rows]
-        for rid in ids:
-            self.rules.delete(f"id = {_quote(rid)}")
-        self.rules.add(rows)
-        self._mirror_rules(rows, current_digests={r["file_path"]: r["file_digest"] for r in rows})
-        self.chunks.create_fts_index("text", use_tantivy=False, replace=True)
-        return ids
+        with self._sync_lock:
+            ids = [r["id"] for r in rows]
+            for rid in ids:
+                self.rules.delete(f"id = {_quote(rid)}")
+            self.rules.add(rows)
+            self._mirror_rules(rows, current_digests={r["file_path"]: r["file_digest"] for r in rows})
+            self.chunks.create_fts_index("text", use_tantivy=False, replace=True)
+            return ids
 
     def _mirror_rules(self, rule_rows: list[dict], current_digests: dict[str, str]) -> None:
         """(Re)emite os chunks kind="rule" para as regras dadas."""
@@ -287,7 +289,8 @@ class IndexStore:
         return out
 
     def delete_rule_row(self, rule_id: str) -> bool:
-        existed = bool([r for r in self.rules.to_arrow().to_pylist() if r["id"] == rule_id])
-        self.rules.delete(f"id = {_quote(rule_id)}")
-        self.chunks.delete(f"symbol = {_quote('rule:' + rule_id)}")
-        return existed
+        with self._sync_lock:
+            existed = bool([r for r in self.rules.to_arrow().to_pylist() if r["id"] == rule_id])
+            self.rules.delete(f"id = {_quote(rule_id)}")
+            self.chunks.delete(f"symbol = {_quote('rule:' + rule_id)}")
+            return existed
