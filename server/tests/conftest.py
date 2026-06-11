@@ -1,3 +1,6 @@
+import hashlib
+import math
+
 import pytest
 
 SAMPLE_PY = '''import re
@@ -59,3 +62,20 @@ def sample_repo(tmp_path):
     (tmp_path / "node_modules").mkdir()
     (tmp_path / "node_modules" / "lib.js").write_text("ignored")
     return tmp_path
+
+
+def fake_embed(texts: list[str]) -> list[list[float]]:
+    """Embedding determinístico por hash de trigramas — rápido, sem modelo.
+
+    Textos iguais -> vetores iguais; textos parecidos -> vetores próximos.
+    """
+    out = []
+    for text in texts:
+        vec = [0.0] * 384
+        for i in range(len(text) - 2):
+            tri = text[i:i + 3].lower()
+            idx = int(hashlib.md5(tri.encode()).hexdigest(), 16) % 384
+            vec[idx] += 1.0
+        norm = math.sqrt(sum(v * v for v in vec)) or 1.0
+        out.append([v / norm for v in vec])
+    return out
