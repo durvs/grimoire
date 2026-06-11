@@ -2,6 +2,17 @@ from grimoire_mcp.chunker import chunk_file
 from tests.conftest import SAMPLE_PY, SAMPLE_TS, SAMPLE_MD
 
 
+def test_chunk_file_accepts_preparsed_tree():
+    from grimoire_mcp.chunker import parse_tree
+
+    tree = parse_tree(SAMPLE_PY, "python")
+    with_tree = chunk_file("src/users.py", SAMPLE_PY, tree=tree)
+    without = chunk_file("src/users.py", SAMPLE_PY)
+    assert [(c.symbol, c.start_line, c.end_line) for c in with_tree] == [
+        (c.symbol, c.start_line, c.end_line) for c in without
+    ]
+
+
 def test_python_chunks_by_symbol():
     chunks = chunk_file("src/users.py", SAMPLE_PY)
     symbols = {c.symbol for c in chunks if c.kind != "block"}

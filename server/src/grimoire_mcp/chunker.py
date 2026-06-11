@@ -51,13 +51,18 @@ def detect_language(rel_path: str) -> str | None:
     return EXT_LANG.get(Path(rel_path).suffix.lower())
 
 
-def chunk_file(rel_path: str, text: str) -> list[Chunk]:
+def parse_tree(text: str, lang: str):
+    """Parseia uma vez; a árvore pode alimentar chunking e extração de refs."""
+    return get_parser(lang).parse(text)
+
+
+def chunk_file(rel_path: str, text: str, tree=None) -> list[Chunk]:
     lang = detect_language(rel_path)
     if lang == "markdown":
         return _chunk_markdown(rel_path, text)
     if lang is not None:
         try:
-            return _chunk_code(rel_path, text, lang)
+            return _chunk_code(rel_path, text, lang, tree)
         except Exception as exc:
             logger.debug("chunker fallback for %s: %s", rel_path, exc)  # gramática indisponível ou parse quebrado -> fallback
     return _chunk_blocks(rel_path, text, lang or "text")
@@ -90,9 +95,9 @@ def _unwrap_definition(node):
     return None, node
 
 
-def _chunk_code(rel_path: str, text: str, lang: str) -> list[Chunk]:
-    parser = get_parser(lang)
-    tree = parser.parse(text)
+def _chunk_code(rel_path: str, text: str, lang: str, tree=None) -> list[Chunk]:
+    if tree is None:
+        tree = parse_tree(text, lang)
     source_bytes = text.encode()
     root = tree.root_node()
     lines = text.splitlines()
