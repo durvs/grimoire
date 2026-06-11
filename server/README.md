@@ -4,10 +4,20 @@ MCP server local de busca semântica em código. Indexa seu projeto na sua máqu
 (embeddings locais via fastembed, índice LanceDB) e expõe busca híbrida
 (semântica + BM25) para agentes de IA — trechos certos em vez de arquivos inteiros.
 
+> **Status:** v0.1.0 (alpha) — ainda não publicado no PyPI.
+
 ## Instalação (Claude Code)
+
+Quando publicado no PyPI:
 
 ```bash
 claude mcp add grimoire -- uvx grimoire-mcp
+```
+
+Por enquanto, direto do clone deste repo:
+
+```bash
+claude mcp add grimoire -- uv run --project /caminho/para/grimoire/server grimoire-mcp
 ```
 
 ## Tools
