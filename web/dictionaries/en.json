@@ -1,42 +1,86 @@
 {
-  "nav": { "github": "GitHub", "switchLang": "Português" },
+  "nav": {
+    "github": "GitHub",
+    "switchLang": "Português"
+  },
   "hero": {
     "tagline": "Local semantic search for AI agents",
     "title": "Your context window runs out before your problem does.",
     "subtitle": "Grimoire indexes your codebase on your machine and hands your AI agent only the snippets that matter — file and line included. No cloud, no Docker, no API key.",
     "cta": "Get started",
-    "install": "claude mcp add grimoire -- uvx grimoire-mcp"
+    "install": "claude mcp add grimoire -- uvx grimoire-mcp",
+    "installNote": "Not on PyPI yet — for now, install from the GitHub repo."
   },
   "math": {
     "title": "The token math",
-    "before": { "label": "Without Grimoire", "value": "~80k tokens", "desc": "Agent re-reads 15 full files to answer one question" },
-    "after": { "label": "With Grimoire", "value": "~2k tokens", "desc": "Agent retrieves the 5 snippets that actually matter" },
+    "before": {
+      "label": "Without Grimoire",
+      "value": "~80k tokens",
+      "desc": "Agent re-reads 15 full files to answer one question"
+    },
+    "after": {
+      "label": "With Grimoire",
+      "value": "~2k tokens",
+      "desc": "Agent retrieves the 5 snippets that actually matter"
+    },
     "footnote": "Same answer. 40x less context."
   },
   "how": {
     "title": "How it works",
     "items": [
-      { "title": "Structural chunking", "desc": "tree-sitter splits code into real units — functions, classes, methods — never blind text blocks." },
-      { "title": "Hybrid search", "desc": "Vector search for concepts (\"where is CPF validated?\") plus BM25 for exact identifiers (getUserById). Fused with RRF." },
-      { "title": "Zero infrastructure", "desc": "Embeddings run locally. The index is a file on disk. Your code never leaves your machine." },
-      { "title": "Always fresh", "desc": "Each search re-indexes only the files that changed. No daemon, no stale results." }
+      {
+        "title": "Structural chunking",
+        "desc": "tree-sitter splits code into real units — functions, classes, methods — never blind text blocks."
+      },
+      {
+        "title": "Hybrid search",
+        "desc": "Vector search for concepts (\"where is CPF validated?\") plus BM25 for exact identifiers (getUserById). Fused with RRF."
+      },
+      {
+        "title": "Zero infrastructure",
+        "desc": "Embeddings run locally. The index is a file on disk. Your code never leaves your machine."
+      },
+      {
+        "title": "Always fresh",
+        "desc": "Each search re-indexes only the files that changed. No daemon, no stale results."
+      }
     ]
   },
   "quickstart": {
     "title": "Quickstart",
     "steps": [
-      { "label": "Add to Claude Code", "code": "claude mcp add grimoire -- uvx grimoire-mcp" },
-      { "label": "Ask your agent", "code": "\"search the project for where discounts are calculated\"" }
+      {
+        "label": "Add to Claude Code",
+        "code": "claude mcp add grimoire -- uvx grimoire-mcp"
+      },
+      {
+        "label": "Ask your agent",
+        "code": "\"search the project for where discounts are calculated\""
+      }
     ]
   },
   "roadmap": {
     "title": "Roadmap",
     "items": [
-      { "version": "Now", "desc": "Hybrid semantic search over any local project" },
-      { "version": "V1.1", "desc": "References & dependency graph — who calls this function?" },
-      { "version": "V1.2", "desc": "Business-rule extraction with file:line traceability" },
-      { "version": "V1.3", "desc": "Persistent per-project memory for decisions" }
+      {
+        "version": "Now",
+        "desc": "Hybrid semantic search over any local project"
+      },
+      {
+        "version": "V1.1",
+        "desc": "References & dependency graph — who calls this function?"
+      },
+      {
+        "version": "V1.2",
+        "desc": "Business-rule extraction with file:line traceability"
+      },
+      {
+        "version": "V1.3",
+        "desc": "Persistent per-project memory for decisions"
+      }
     ]
   },
-  "footer": { "text": "Open source, MIT. Built for agents that read too much." }
+  "footer": {
+    "text": "Open source, MIT. Built for agents that read too much."
+  }
 }

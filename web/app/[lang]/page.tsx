@@ -120,6 +120,17 @@ export default async function Landing({
               </span>
             </a>
           </div>
+          <p className="mt-3 font-mono text-xs text-zinc-500">
+            {t.hero.installNote}{" "}
+            <a
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline decoration-zinc-700 underline-offset-2 transition-colors hover:text-accent"
+            >
+              {GITHUB_URL.replace("https://", "")}
+            </a>
+          </p>
         </section>
 
         {/* token math */}

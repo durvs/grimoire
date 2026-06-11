@@ -26,6 +26,7 @@ export async function generateMetadata({
   const { lang } = await params;
   const pt = lang === "pt";
   return {
+    metadataBase: new URL("https://grimoire-apeplatform.vercel.app"),
     title: pt
       ? "Grimoire — busca semântica local para agentes de IA"
       : "Grimoire — local semantic search for AI agents",
