@@ -49,6 +49,8 @@ def scan(root: Path) -> list[ScannedFile]:
             and not spec.match_file(Path(dirpath, d).relative_to(root).as_posix() + "/")
         ]
         for name in filenames:
+            if name.startswith("."):
+                continue  # skip hidden/dotfiles (e.g. .gitignore, .env) — not useful for semantic search
             path = Path(dirpath) / name
             rel = path.relative_to(root).as_posix()
             if spec.match_file(rel):
