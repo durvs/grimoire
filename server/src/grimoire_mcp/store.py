@@ -72,6 +72,29 @@ def _rules_schema() -> pa.Schema:
     ])
 
 
+def _memories_schema() -> pa.Schema:
+    return pa.schema([
+        pa.field("id", pa.string()),
+        pa.field("text", pa.string()),
+        pa.field("kind", pa.string()),         # decision | learning | context | todo
+        pa.field("created_at", pa.string()),   # ISO UTC
+        pa.field("anchors_json", pa.string()), # [{file, digest}]
+    ])
+
+
+def _anchor_statuses(anchors: list[dict], manifest_files: dict) -> list[dict]:
+    out = []
+    for a in anchors:
+        if a["file"] not in manifest_files:
+            status = "missing"
+        elif manifest_files[a["file"]] != a["digest"]:
+            status = "stale"
+        else:
+            status = "ok"
+        out.append({"file": a["file"], "status": status})
+    return out
+
+
 def _quote(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
@@ -98,6 +121,7 @@ class IndexStore:
         self.refs = self.db.create_table("refs", schema=_refs_schema(), exist_ok=True)
         self.imports = self.db.create_table("imports", schema=_imports_schema(), exist_ok=True)
         self.rules = self.db.create_table("rules", schema=_rules_schema(), exist_ok=True)
+        self.memories = self.db.create_table("memories", schema=_memories_schema(), exist_ok=True)
         self._manifest_path = self.dir / "manifest.json"
         self._sync_lock = threading.Lock()
 
@@ -121,7 +145,7 @@ class IndexStore:
     def _sync_locked(self) -> dict:
         manifest = self._load_manifest()
         if manifest.get("version") != INDEX_VERSION:
-            for name in ("chunks", "refs", "imports", "rules"):
+            for name in ("chunks", "refs", "imports", "rules", "memories"):
                 try:
                     self.db.drop_table(name)
                 except Exception:  # noqa: BLE001 - tabela pode não existir
@@ -130,6 +154,7 @@ class IndexStore:
             self.refs = self.db.create_table("refs", schema=_refs_schema(), exist_ok=True)
             self.imports = self.db.create_table("imports", schema=_imports_schema(), exist_ok=True)
             self.rules = self.db.create_table("rules", schema=_rules_schema(), exist_ok=True)
+            self.memories = self.db.create_table("memories", schema=_memories_schema(), exist_ok=True)
             manifest = {"project_path": str(self.root), "version": INDEX_VERSION, "files": {}}
         known: dict[str, str] = manifest["files"]
         all_scanned = scan(self.root)
@@ -294,3 +319,50 @@ class IndexStore:
             self.rules.delete(f"id = {_quote(rule_id)}")
             self.chunks.delete(f"symbol = {_quote('rule:' + rule_id)}")
             return existed
+
+    def save_memory_row(self, row: dict) -> bool:
+        """Upsert por id + espelho kind="memory" no índice de busca.
+
+        O espelho é emitido UMA vez aqui (file_path="" fica fora do ciclo de
+        vida de arquivos do sync). Retorna True quando a memória já existia.
+        """
+        with self._sync_lock:
+            rid = row["id"]
+            existed = any(
+                m["id"] == rid for m in self.memories.to_arrow().to_pylist()
+            )
+            self.memories.delete(f"id = {_quote(rid)}")
+            self.memories.add([row])
+            self.chunks.delete(f"symbol = {_quote('memory:' + rid)}")
+            text = f"[memória:{row['kind']}] {row['text']}"
+            vec = self.embed_fn([text])[0]
+            self.chunks.add([{
+                "vector": vec, "text": text, "file_path": "",
+                "start_line": 0, "end_line": 0,
+                "symbol": f"memory:{rid}", "kind": "memory", "language": "memory",
+            }])
+            self.chunks.create_fts_index("text", use_tantivy=False, replace=True)
+        return existed
+
+    def list_memories(self, kind: str | None = None) -> list[dict]:
+        manifest_files = self._load_manifest()["files"]
+        rows = self.memories.to_arrow().to_pylist()
+        if kind is not None:
+            rows = [r for r in rows if r["kind"] == kind]
+        return [
+            {
+                "id": r["id"], "text": r["text"], "kind": r["kind"],
+                "created_at": r["created_at"],
+                "anchors": _anchor_statuses(json.loads(r["anchors_json"]), manifest_files),
+            }
+            for r in sorted(rows, key=lambda r: r["created_at"], reverse=True)
+        ]
+
+    def forget_memory_row(self, memory_id: str) -> bool:
+        with self._sync_lock:
+            existed = any(
+                m["id"] == memory_id for m in self.memories.to_arrow().to_pylist()
+            )
+            self.memories.delete(f"id = {_quote(memory_id)}")
+            self.chunks.delete(f"symbol = {_quote('memory:' + memory_id)}")
+        return existed
