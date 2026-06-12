@@ -236,7 +236,7 @@ def save_rules(project_path: str, rules: list[dict]) -> dict:
     """Valida e persiste regras de negócio extraídas; itens inválidos voltam em rejected."""
     store = _store_for(project_path)
     store.sync()
-    manifest_files = json.loads(store._manifest_path.read_text())["files"]
+    manifest_files = store._load_manifest()["files"]
     valid_rows, rejected = [], []
     for item in rules:
         reason = _validate_rule(item, project_path, manifest_files)
@@ -307,7 +307,8 @@ def remember(
     Use ao tomar uma decisão não-óbvia ou aprender algo que não está no código —
     a memória persiste entre sessões e aparece no `recall` e no `search`.
     `files` opcional ancora a memória em arquivos (ganha aviso de stale se mudarem).
-    Re-gravar o mesmo texto atualiza (upsert) em vez de duplicar.
+    Re-lembrar o mesmo texto atualiza a memória (data e, se `files` for passado,
+    âncoras; sem `files`, âncoras são preservadas). `files=[]` limpa as âncoras.
     """
     if not text.strip():
         raise ValueError("text vazio")
@@ -315,16 +316,23 @@ def remember(
         raise ValueError(f"kind inválido: {kind!r} (use {sorted(MEMORY_KINDS)})")
     store = _store_for(project_path)
     store.sync()
-    manifest_files = json.loads(store._manifest_path.read_text())["files"]
-    anchors = []
-    for f in files or []:
-        rel = _rel_inside(project_path, f)
-        if rel not in manifest_files:
-            raise ValueError(f"âncora não indexada: {rel}")
-        anchors.append({"file": rel, "digest": manifest_files[rel]})
+    manifest_files = store._load_manifest()["files"]
+    mid = memory_id(text)
+    if files is None:
+        # Preserve existing anchors — only re-embed with updated timestamp.
+        existing = store.get_memory(mid)
+        anchors_json = existing["anchors_json"] if existing else json.dumps([])
+    else:
+        anchors = []
+        for f in files:
+            rel = _rel_inside(project_path, f)
+            if rel not in manifest_files:
+                raise ValueError(f"âncora não indexada: {rel}")
+            anchors.append({"file": rel, "digest": manifest_files[rel]})
+        anchors_json = json.dumps(anchors)
     row = {
-        "id": memory_id(text), "text": text.strip(), "kind": kind,
-        "created_at": now_iso(), "anchors_json": json.dumps(anchors),
+        "id": mid, "text": text.strip(), "kind": kind,
+        "created_at": now_iso(), "anchors_json": anchors_json,
     }
     updated = store.save_memory_row(row)
     return {"id": row["id"], "updated": updated}

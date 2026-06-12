@@ -344,6 +344,14 @@ class IndexStore:
             self.chunks.create_fts_index("text", use_tantivy=False, replace=True)
         return existed
 
+    def get_memory(self, memory_id: str) -> dict | None:
+        """Retorna a linha raw da tabela memories ou None se não existir."""
+        rows = self.memories.to_arrow().to_pylist()
+        for r in rows:
+            if r["id"] == memory_id:
+                return r
+        return None
+
     def list_memories(self, kind: str | None = None) -> list[dict]:
         manifest_files = self._load_manifest()["files"]
         rows = self.memories.to_arrow().to_pylist()

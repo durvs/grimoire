@@ -132,3 +132,16 @@ def test_recall_kind_filter(sample_repo, monkeypatch, tmp_path):
     store.save_memory_row(_memory_row("pt-BR também na documentação", "decision"))
     out = recall_memories(store, "pt-BR", top_k=5, kind="decision")
     assert [m["kind"] for m in out] == ["decision"]
+
+
+def test_recall_kind_filter_not_starved_by_other_kinds(sample_repo, monkeypatch, tmp_path):
+    from grimoire_mcp.search import recall_memories
+
+    store = _store(sample_repo, monkeypatch, tmp_path)
+    for i in range(10):
+        store.save_memory_row(_memory_row(f"contexto sobre lockfiles do uv numero {i}", "context"))
+    store.save_memory_row(_memory_row("decisão: lockfiles do uv sempre commitados", "decision"))
+    store.save_memory_row(_memory_row("decisão: lockfiles do uv revisados em PR", "decision"))
+    out = recall_memories(store, "lockfiles do uv", top_k=2, kind="decision")
+    assert len(out) == 2
+    assert all(m["kind"] == "decision" for m in out)

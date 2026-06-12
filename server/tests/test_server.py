@@ -213,6 +213,28 @@ async def test_memory_full_flow(sample_repo):
         assert out["deleted"] is True
 
 
+async def test_remember_preserves_anchors_without_files(sample_repo):
+    async with Client(mcp) as client:
+        await client.call_tool("remember", {
+            "project_path": str(sample_repo), "text": "âncora fica",
+            "kind": "context", "files": ["src/users.py"],
+        })
+        out = (await client.call_tool("remember", {
+            "project_path": str(sample_repo), "text": "âncora fica",
+        })).data
+        assert out["updated"] is True
+        listed = (await client.call_tool("memories", {"project_path": str(sample_repo)})).data
+        mine = next(m for m in listed if m["id"] == out["id"])
+        assert mine["anchors"] == [{"file": "src/users.py", "status": "ok"}]
+
+        await client.call_tool("remember", {
+            "project_path": str(sample_repo), "text": "âncora fica", "files": [],
+        })
+        listed = (await client.call_tool("memories", {"project_path": str(sample_repo)})).data
+        mine = next(m for m in listed if m["id"] == out["id"])
+        assert mine["anchors"] == []
+
+
 async def test_remember_validations(sample_repo):
     import pytest as _pytest
     async with Client(mcp) as client:

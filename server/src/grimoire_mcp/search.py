@@ -91,7 +91,11 @@ def recall_memories(
     """Recall semântico de memórias: relevância híbrida com boost de recência."""
     from .memory import age_days, recency_factor
 
-    hits = hybrid_search(store, query, top_k=top_k * 3, language="memory")
+    # When kind is set we post-filter hits, so we must fetch enough candidates to
+    # survive filtering. Use the hybrid_search horizon (CANDIDATES per modality)
+    # as the ceiling — beyond it hybrid_search can't see anyway (V2: tracked item).
+    fetch = max(top_k * 3, CANDIDATES) if kind is not None else top_k * 3
+    hits = hybrid_search(store, query, top_k=fetch, language="memory")
     if not hits:
         return []
     by_id = {m["id"]: m for m in store.list_memories()}
