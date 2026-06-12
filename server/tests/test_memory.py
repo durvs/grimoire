@@ -102,3 +102,33 @@ def test_forget_memory_row(sample_repo, monkeypatch, tmp_path):
     assert store.forget_memory_row(row["id"]) is False
     assert store.memories.count_rows() == 0
     assert [c for c in store.chunks.to_arrow().to_pylist() if c["kind"] == "memory"] == []
+
+
+def test_recall_finds_semantically_and_boosts_recent(sample_repo, monkeypatch, tmp_path):
+    from grimoire_mcp.search import recall_memories
+
+    store = _store(sample_repo, monkeypatch, tmp_path)
+    now = datetime.now(timezone.utc)
+    store.save_memory_row(_memory_row(
+        "preferimos lockfiles do uv no repositório", "decision",
+        created=(now - timedelta(days=30)).isoformat(),
+    ))
+    store.save_memory_row(_memory_row(
+        "preferimos lockfiles do uv sempre commitados", "decision",
+        created=now.isoformat(),
+    ))
+    out = recall_memories(store, "lockfiles do uv", top_k=2)
+    assert len(out) == 2
+    assert out[0]["text"] == "preferimos lockfiles do uv sempre commitados"  # recência desempata
+    assert out[0]["score"] > out[1]["score"]
+    assert {"id", "text", "kind", "created_at", "age_days", "score", "anchors"} <= set(out[0])
+
+
+def test_recall_kind_filter(sample_repo, monkeypatch, tmp_path):
+    from grimoire_mcp.search import recall_memories
+
+    store = _store(sample_repo, monkeypatch, tmp_path)
+    store.save_memory_row(_memory_row("usar pt-BR nos commits", "context"))
+    store.save_memory_row(_memory_row("pt-BR também na documentação", "decision"))
+    out = recall_memories(store, "pt-BR", top_k=5, kind="decision")
+    assert [m["kind"] for m in out] == ["decision"]

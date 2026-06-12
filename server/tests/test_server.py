@@ -178,3 +178,55 @@ async def test_extract_rules_scope_guard(sample_repo):
             await client.call_tool("extract_rules", {
                 "project_path": str(sample_repo), "scope": "../../etc",
             })
+
+
+async def test_memory_full_flow(sample_repo):
+    async with Client(mcp) as client:
+        saved = (await client.call_tool("remember", {
+            "project_path": str(sample_repo),
+            "text": "Desconto é calculado em OrderService",
+            "kind": "learning",
+            "files": ["src/orders.ts"],
+        })).data
+        assert saved["updated"] is False
+
+        recalled = (await client.call_tool("recall", {
+            "project_path": str(sample_repo),
+            "query": "onde calcula desconto",
+        })).data
+        assert any(m["id"] == saved["id"] for m in recalled)
+        mine = next(m for m in recalled if m["id"] == saved["id"])
+        assert mine["anchors"][0] == {"file": "src/orders.ts", "status": "ok"}
+
+        results = (await client.call_tool("search", {
+            "query": "Desconto é calculado em OrderService",
+            "project_path": str(sample_repo),
+        })).data
+        assert any(r["kind"] == "memory" for r in results)
+
+        listed = (await client.call_tool("memories", {"project_path": str(sample_repo)})).data
+        assert any(m["id"] == saved["id"] for m in listed)
+
+        out = (await client.call_tool("forget", {
+            "project_path": str(sample_repo), "memory_id": saved["id"],
+        })).data
+        assert out["deleted"] is True
+
+
+async def test_remember_validations(sample_repo):
+    import pytest as _pytest
+    async with Client(mcp) as client:
+        with _pytest.raises(Exception):  # kind inválido
+            await client.call_tool("remember", {
+                "project_path": str(sample_repo), "text": "x", "kind": "banana",
+            })
+        with _pytest.raises(Exception):  # âncora fora do projeto
+            await client.call_tool("remember", {
+                "project_path": str(sample_repo), "text": "y",
+                "files": ["../../etc/passwd"],
+            })
+        with _pytest.raises(Exception):  # âncora não indexada
+            await client.call_tool("remember", {
+                "project_path": str(sample_repo), "text": "z",
+                "files": ["src/nao_existe.py"],
+            })

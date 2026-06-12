@@ -25,8 +25,9 @@ from fastmcp import FastMCP
 
 from . import config
 from .chunker import chunk_file
+from .memory import MEMORY_KINDS, memory_id, now_iso
 from .rules import EXTRACTION_INSTRUCTIONS, RULE_CATEGORIES, is_test_path, rule_id, rule_signal_score
-from .search import hybrid_search
+from .search import hybrid_search, recall_memories
 from .store import IndexStore, _quote
 
 mcp = FastMCP(
@@ -38,7 +39,9 @@ mcp = FastMCP(
         "Use `find_references` para 'quem usa/chama X', `dependencies_of`/`dependents_of` "
         "para navegar o grafo de imports. "
         "Para regras de negócio: `extract_rules` → você extrai → `save_rules`; "
-        "consulte com `rules` ou via `search`."
+        "consulte com `rules` ou via `search`. "
+        "Memória de projeto: chame `recall` com o tema ao começar a trabalhar; "
+        "grave decisões não-óbvias e aprendizados com `remember`."
     ),
 )
 
@@ -293,6 +296,64 @@ def delete_rule(project_path: str, rule_id: str) -> dict:
     """Remove uma regra (tabela + espelho na busca)."""
     store = _store_for(project_path)
     return {"deleted": store.delete_rule_row(rule_id)}
+
+
+@mcp.tool
+def remember(
+    project_path: str, text: str, kind: str = "context", files: list[str] | None = None,
+) -> dict:
+    """Grava uma memória do projeto (decisão, aprendizado, contexto, todo).
+
+    Use ao tomar uma decisão não-óbvia ou aprender algo que não está no código —
+    a memória persiste entre sessões e aparece no `recall` e no `search`.
+    `files` opcional ancora a memória em arquivos (ganha aviso de stale se mudarem).
+    Re-gravar o mesmo texto atualiza (upsert) em vez de duplicar.
+    """
+    if not text.strip():
+        raise ValueError("text vazio")
+    if kind not in MEMORY_KINDS:
+        raise ValueError(f"kind inválido: {kind!r} (use {sorted(MEMORY_KINDS)})")
+    store = _store_for(project_path)
+    store.sync()
+    manifest_files = json.loads(store._manifest_path.read_text())["files"]
+    anchors = []
+    for f in files or []:
+        rel = _rel_inside(project_path, f)
+        if rel not in manifest_files:
+            raise ValueError(f"âncora não indexada: {rel}")
+        anchors.append({"file": rel, "digest": manifest_files[rel]})
+    row = {
+        "id": memory_id(text), "text": text.strip(), "kind": kind,
+        "created_at": now_iso(), "anchors_json": json.dumps(anchors),
+    }
+    updated = store.save_memory_row(row)
+    return {"id": row["id"], "updated": updated}
+
+
+@mcp.tool
+def recall(project_path: str, query: str, top_k: int = 5, kind: str | None = None) -> list[dict]:
+    """Recupera memórias do projeto por relevância semântica (+ boost de recência).
+
+    Chame ao começar a trabalhar num projeto, com o tema da tarefa.
+    """
+    store = _store_for(project_path)
+    store.sync()
+    return recall_memories(store, query, top_k=top_k, kind=kind)
+
+
+@mcp.tool
+def memories(project_path: str, kind: str | None = None) -> list[dict]:
+    """Lista todas as memórias do projeto, mais recentes primeiro."""
+    store = _store_for(project_path)
+    store.sync()
+    return store.list_memories(kind)
+
+
+@mcp.tool
+def forget(project_path: str, memory_id: str) -> dict:
+    """Remove uma memória (tabela + espelho na busca)."""
+    store = _store_for(project_path)
+    return {"deleted": store.forget_memory_row(memory_id)}
 
 
 def main() -> None:

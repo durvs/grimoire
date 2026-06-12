@@ -83,3 +83,28 @@ def hybrid_search(
             "snippet": "\n".join(snippet_lines),
         })
     return results
+
+
+def recall_memories(
+    store: IndexStore, query: str, top_k: int = 5, kind: str | None = None,
+) -> list[dict]:
+    """Recall semântico de memórias: relevância híbrida com boost de recência."""
+    from .memory import age_days, recency_factor
+
+    hits = hybrid_search(store, query, top_k=top_k * 3, language="memory")
+    if not hits:
+        return []
+    by_id = {m["id"]: m for m in store.list_memories()}
+    results = []
+    for h in hits:
+        mid = h["symbol"].removeprefix("memory:")
+        m = by_id.get(mid)
+        if m is None or (kind is not None and m["kind"] != kind):
+            continue
+        results.append({
+            **m,
+            "age_days": round(age_days(m["created_at"]), 1),
+            "score": round(h["score"] * recency_factor(m["created_at"]), 4),
+        })
+    results.sort(key=lambda r: r["score"], reverse=True)
+    return results[:top_k]

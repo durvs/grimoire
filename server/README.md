@@ -4,7 +4,7 @@ MCP server local de busca semântica em código. Indexa seu projeto na sua máqu
 (embeddings locais via fastembed, índice LanceDB) e expõe busca híbrida
 (semântica + BM25) para agentes de IA — trechos certos em vez de arquivos inteiros.
 
-> **Status:** v0.3.0 (alpha) — ainda não publicado no PyPI.
+> **Status:** v0.4.0 (alpha) — ainda não publicado no PyPI.
 > Enquanto isso, troque `uvx grimoire-mcp` nos comandos abaixo por
 > `uv run --project /caminho/para/grimoire/server grimoire-mcp` (direto do clone).
 
@@ -87,8 +87,20 @@ gemini mcp add grimoire uvx grimoire-mcp
 | `save_rules(project_path, rules)` | Valida e persiste regras com rastreabilidade file:line |
 | `rules(project_path, file_path)` | Lista regras extraídas (com flag stale) |
 | `delete_rule(project_path, rule_id)` | Remove uma regra |
+| `remember(project_path, text, kind, files)` | Grava memória do projeto (decisão/aprendizado/contexto/todo) |
+| `recall(project_path, query, top_k, kind)` | Recupera memórias por relevância semântica + recência |
+| `memories(project_path, kind)` | Lista memórias (com status das âncoras) |
+| `forget(project_path, memory_id)` | Remove uma memória |
 
 O índice fica em `~/.grimoire/indexes/` — nada é gravado dentro dos seus repos.
+
+## Memória proativa (opcional)
+
+Para o agente consultar e alimentar a memória automaticamente, adicione ao
+`CLAUDE.md` do seu projeto:
+
+> Ao começar uma tarefa, chame a tool MCP `recall` do grimoire com o tema.
+> Ao tomar decisões não-óbvias, grave-as com `remember`.
 
 ## Desenvolvimento
 
