@@ -64,15 +64,11 @@
     "items": [
       {
         "version": "Hoje",
-        "desc": "Busca híbrida, referências e grafo de dependências, e extração de regras de negócio com rastreabilidade file:line"
-      },
-      {
-        "version": "V1.3",
-        "desc": "Memória persistente de decisões por projeto"
+        "desc": "Busca híbrida, referências e grafo de dependências, extração de regras de negócio e memória por projeto (remember/recall)"
       },
       {
         "version": "V2",
-        "desc": "Watcher opcional, reranker local, multi-repo"
+        "desc": "Watcher opcional, reranker local, multi-repo, export de documentação"
       }
     ]
   },

@@ -64,15 +64,11 @@
     "items": [
       {
         "version": "Now",
-        "desc": "Hybrid search, references & dependency graph, and business-rule extraction with file:line traceability"
-      },
-      {
-        "version": "V1.3",
-        "desc": "Persistent per-project memory for decisions"
+        "desc": "Hybrid search, references & dependency graph, business-rule extraction, and per-project memory (remember/recall)"
       },
       {
         "version": "V2",
-        "desc": "Optional watcher, local reranker, multi-repo"
+        "desc": "Optional watcher, local reranker, multi-repo, docs export"
       }
     ]
   },
